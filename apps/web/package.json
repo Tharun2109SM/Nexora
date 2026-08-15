@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev --turbopack",
     "lint": "eslint .",
+    "prebuild": "pnpm --filter @nexora/contracts build",
     "start": "next start",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
