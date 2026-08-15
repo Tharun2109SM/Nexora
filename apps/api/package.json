@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "pnpm --filter @nexora/contracts build && node --env-file=.env --watch --import tsx src/server.ts",
+    "dev": "pnpm --filter @nexora/contracts build && tsx watch src/server.ts",
     "lint": "eslint .",
     "start": "node dist/server.js",
     "test": "pnpm --filter @nexora/contracts build && LOG_LEVEL=silent vitest run",
