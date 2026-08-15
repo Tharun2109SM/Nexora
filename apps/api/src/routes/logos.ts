@@ -83,12 +83,10 @@ logosRouter.put(
         validated.contentType,
         validated.extension,
       )
-      const update = await supabase
-        .from('organizations')
-        .update({ logo_object_key: newKey })
-        .eq('id', organizationId)
-        .select('id')
-        .single()
+      const update = await supabase.rpc('set_organization_logo_object_key', {
+        new_logo_object_key: newKey,
+        target_organization_id: organizationId,
+      })
       throwDatabaseError(update.error, 'Unable to save the organization logo.')
       if (currentRow.logo_object_key) {
         try {

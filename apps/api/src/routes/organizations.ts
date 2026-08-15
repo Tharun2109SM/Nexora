@@ -65,6 +65,12 @@ const organizationRowSchema = z.object({
   name: z.string(),
   website: z.string().nullable(),
 })
+const rpcResponseSchema = z
+  .object({
+    data: z.unknown(),
+    error: z.object({ code: z.string().optional(), message: z.string() }).nullable(),
+  })
+  .loose()
 
 organizationsRouter.get(
   '/organizations/:organizationId',
@@ -73,6 +79,8 @@ organizationsRouter.get(
     try {
       const { organizationId } = idParameterSchema.parse(request.params)
       const supabase = createCallerClient(request.accessToken)
+      const canAdministerInvitations =
+        request.identity?.role === 'CUSTOMER_ADMIN' || request.identity?.role === 'BEAUROI_ADMIN'
       const [organization, members, assignments, subscriptions, invitations] = await Promise.all([
         supabase
           .from('organizations')
@@ -96,13 +104,11 @@ organizationsRouter.get(
           .from('customer_subscriptions')
           .select('id, status, starts_on, ends_on, products(name, code)')
           .eq('organization_id', organizationId),
-        supabase
-          .from('organization_invitations')
-          .select(
-            'id, normalized_email, intended_role, status, created_at, expires_at, accepted_at, revoked_at',
-          )
-          .eq('organization_id', organizationId)
-          .order('created_at', { ascending: false }),
+        canAdministerInvitations
+          ? supabase.rpc('list_organization_invitations', {
+              target_organization_id: organizationId,
+            })
+          : Promise.resolve({ data: [], error: null }),
       ])
       throwDatabaseError(organization.error, 'Organization not found.')
       for (const result of [members, assignments, subscriptions, invitations])
@@ -236,23 +242,25 @@ organizationsRouter.post(
       const token = crypto.randomBytes(32).toString('base64url')
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
       const expiresAt = new Date(Date.now() + input.expiresInDays * 86_400_000).toISOString()
-      const { data, error } = await createCallerClient(request.accessToken)
-        .from('organization_invitations')
-        .insert({
-          expires_at: expiresAt,
-          intended_role: input.role,
-          invited_by: request.identity.userId,
-          normalized_email: input.email,
-          organization_id: organizationId,
-          token_hash: tokenHash,
-        })
-        .select('id, normalized_email, intended_role, created_at, expires_at, status')
-        .single()
-      throwDatabaseError(error, 'Unable to create the invitation.')
+      const rpcResult: unknown = await createCallerClient(request.accessToken).rpc(
+        'create_organization_invitation',
+        {
+          invitation_expires_at: expiresAt,
+          invitation_role: input.role,
+          invitation_token_hash: tokenHash,
+          invited_email: input.email,
+          target_organization_id: organizationId,
+        },
+      )
+      const result = rpcResponseSchema.parse(rpcResult)
+      throwDatabaseError(result.error, 'Unable to create the invitation.')
+      const invitation = invitationRowsSchema.element
+        .omit({ accepted_at: true, revoked_at: true })
+        .parse(z.array(z.unknown()).parse(result.data).at(0))
       const invitationUrl = `${environment.WEB_APP_URL}/invitations/accept?token=${encodeURIComponent(token)}`
       await invitationDelivery.deliver({ email: input.email, invitationUrl })
       response.status(201).json({
-        data: { ...data, deliveryConfigured: invitationDelivery.configured, invitationUrl },
+        data: { ...invitation, deliveryConfigured: invitationDelivery.configured, invitationUrl },
         message: invitationDelivery.configured
           ? 'Invitation created and queued for delivery.'
           : 'Invitation created. Email delivery is not configured; copy this link now.',
@@ -270,20 +278,19 @@ organizationsRouter.delete(
     try {
       const { invitationId, organizationId } = invitationParameterSchema.parse(request.params)
       if (!request.identity) throw new AppError(401, 'AUTH_REQUIRED', 'Authentication is required.')
-      const { data, error } = await createCallerClient(request.accessToken)
-        .from('organization_invitations')
-        .update({
-          revoked_at: new Date().toISOString(),
-          revoked_by: request.identity.userId,
-          status: 'REVOKED',
-        })
-        .eq('id', invitationId)
-        .eq('organization_id', organizationId)
-        .eq('status', 'PENDING')
-        .select('id, status')
-        .single()
-      throwDatabaseError(error, 'Unable to revoke the invitation.')
-      response.json({ data })
+      const rpcResult: unknown = await createCallerClient(request.accessToken).rpc(
+        'revoke_organization_invitation',
+        {
+          target_invitation_id: invitationId,
+          target_organization_id: organizationId,
+        },
+      )
+      const rpcResponse = rpcResponseSchema.parse(rpcResult)
+      throwDatabaseError(rpcResponse.error, 'Unable to revoke the invitation.')
+      const invitations = z
+        .array(z.object({ id: z.uuid(), status: z.literal('REVOKED') }))
+        .parse(rpcResponse.data)
+      response.json({ data: invitations.at(0) })
     } catch (error) {
       next(error)
     }
@@ -293,10 +300,9 @@ organizationsRouter.delete(
 organizationsRouter.post('/invitations/accept', async (request, response, next) => {
   try {
     const input = invitationAcceptSchema.parse(request.body)
-    const tokenHash = crypto.createHash('sha256').update(input.token).digest('hex')
     const rpcResult: unknown = await createCallerClient(request.accessToken).rpc(
       'accept_organization_invitation',
-      { invitation_token_hash: tokenHash },
+      { invitation_token: input.token },
     )
     const result = z
       .object({ data: z.uuid().nullable(), error: z.unknown().nullable() })

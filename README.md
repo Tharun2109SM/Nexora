@@ -234,6 +234,8 @@ pnpm exec supabase db lint
 pnpm exec supabase db advisors
 ```
 
+Milestone 2 also includes populated-Milestone-1 and concurrent-invitation fixtures under `supabase/compatibility`. These are local-only destructive database checks; run them only against the Supabase CLI development stack as described in `docs/milestone-2.md`.
+
 Build the API container from the repository root:
 
 ```bash

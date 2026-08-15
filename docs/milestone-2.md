@@ -24,6 +24,8 @@ Customer members can read their own company profile, team, active Beau Roi conta
 
 All permissions are also enforced by PostgreSQL grants, RLS policies, constraints, and guarded database functions. A user cannot gain Beau Roi access from an email address or editable metadata.
 
+Membership deletion is not an application capability: `authenticated` has no `DELETE` grant or policy, and membership history is preserved through status changes. No unconditional delete trigger blocks database-owner maintenance, organization cleanup, or valid foreign-key cascades. Internal invitation and logo transaction markers are usable only inside their approved owner-executed RPC workflows; setting the custom PostgreSQL setting as an authenticated caller grants no additional capability.
+
 ## API
 
 All routes below are under `/v1`, require a Supabase bearer JWT, and return the existing request-ID error envelope.
@@ -50,7 +52,7 @@ Customer list parameters are `search`, `lifecycle`, `industry`, `country`, `heal
 
 ## Invitations
 
-The API generates 256-bit random tokens and stores only SHA-256 hashes. Pending emails are normalized and unique per organization. Acceptance locks the invitation, checks the signed JWT email, expiry, revocation, and prior use, then creates or reactivates the customer membership atomically. Raw links are returned only by the create response.
+The API generates 256-bit random tokens and stores only lowercase SHA-256 hashes. The invitation table grants no `SELECT`, `INSERT`, `UPDATE`, or `DELETE` access to `anon` or `authenticated`; safe listing, creation, revocation, and acceptance are narrow RPCs with database authorization. No view or RPC returns `token_hash`. Acceptance receives the raw token, hashes it inside PostgreSQL with `pgcrypto`, locks the matching row, checks the signed JWT email, expiry, revocation, and prior use, then creates or reactivates the customer membership atomically. Raw links are returned only by the create response.
 
 SMTP is not configured. The UI says so and provides a one-time copy control; it never claims mail was sent. `InvitationDelivery` is the provider boundary for a future approved SMTP or Resend integration.
 
@@ -75,7 +77,20 @@ Without all four variables, the API starts normally, returns `FILE_STORAGE_NOT_C
 
 ## Migration and production order
 
-The additive migration is `20260815090632_customer_management_organization_admin.sql`. It must be reviewed and tested locally before merge. Safe deployment order:
+The additive migration is `20260815090632_customer_management_organization_admin.sql`. Because it remains unapplied, compatibility corrections are maintained in that existing file. It verifies the exact Milestone 1 assignment constraint before replacing it, backfills inactive history, and fails with organization/type details when duplicate active CSM or implementation assignments require manual review. It must be reviewed and tested locally before merge. Safe deployment order:
+
+Local compatibility checks use only the Supabase CLI development database:
+
+```bash
+pnpm exec supabase db reset --local --version 20260814183342 --sql-paths compatibility/milestone1-populated.sql
+pnpm exec supabase migration up --local
+pnpm exec supabase test db supabase/compatibility/milestone2-populated.test.sql
+
+pnpm exec supabase db reset --local --sql-paths compatibility/milestone2-concurrent-invitation.sql
+bash supabase/compatibility/test-concurrent-invitation.sh
+```
+
+The duplicate-active fixture is expected to make `supabase migration up --local` fail with the explicit preflight error and the affected organization/type/count; it never resolves or deletes history automatically.
 
 1. Back up and review the linked Supabase project; confirm the existing Milestone 1 migration is applied.
 2. Merge the reviewed migration and let the existing Supabase GitHub integration apply it once.
