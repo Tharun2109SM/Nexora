@@ -12,6 +12,7 @@
     "typecheck": "pnpm --filter @nexora/contracts build && tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1110.0",
     "@nexora/contracts": "workspace:*",
     "@supabase/supabase-js": "2.112.3",
     "cors": "2.8.6",

@@ -89,10 +89,17 @@ function FormError({ message }: { message?: string | undefined }) {
   )
 }
 
-export function LoginForm({ verificationError = false }: { verificationError?: boolean }) {
+export function LoginForm({
+  next,
+  verificationError = false,
+}: {
+  next?: string
+  verificationError?: boolean
+}) {
   const [state, formAction] = useActionState(loginAction, initialState)
   return (
     <form action={formAction} className="mt-8 space-y-5" noValidate>
+      {next && <input name="next" type="hidden" value={next} />}
       <FormError
         message={
           state.error ??

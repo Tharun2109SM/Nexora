@@ -13,6 +13,10 @@ export class AppError extends Error {
   }
 }
 
+function isRequestEntityTooLarge(error: unknown): boolean {
+  return error instanceof Error && 'type' in error && error.type === 'entity.too.large'
+}
+
 export function notFoundHandler(request: Request, _response: Response, next: NextFunction) {
   next(new AppError(404, 'NOT_FOUND', `No API route matches ${request.method} ${request.path}.`))
 }
@@ -29,7 +33,9 @@ export function errorHandler(
       ? error
       : error instanceof ZodError
         ? new AppError(400, 'VALIDATION_ERROR', 'The request is invalid.', z.treeifyError(error))
-        : new AppError(500, 'INTERNAL_ERROR', 'An unexpected server error occurred.')
+        : isRequestEntityTooLarge(error)
+          ? new AppError(413, 'PAYLOAD_TOO_LARGE', 'The request body exceeds the allowed size.')
+          : new AppError(500, 'INTERNAL_ERROR', 'An unexpected server error occurred.')
 
   if (appError.status >= 500)
     request.log.error({ err: error, requestId: request.requestId }, 'Request failed')

@@ -33,6 +33,9 @@ export async function loginAction(
   const { error } = await supabase.auth.signInWithPassword(parsed.data)
   if (error) return { error: 'Email or password is incorrect. Please try again.' }
 
+  const next = formData.get('next')
+  if (typeof next === 'string' && next.startsWith('/invitations/accept?token=')) redirect(next)
+
   const viewer = await getViewer()
   if (!viewer) {
     await supabase.auth.signOut()

@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  assignmentCreateSchema,
   canAccessOrganization,
   canAccessPortal,
+  customerCursorSchema,
+  customerListQuerySchema,
+  healthScoreCreateSchema,
+  invitationCreateSchema,
+  memberMutationSchema,
   portalForRole,
   routeForRole,
 } from '../src/index.js'
@@ -22,6 +28,42 @@ describe('role routing', () => {
   it('rejects cross-portal access', () => {
     expect(canAccessPortal('CUSTOMER_ADMIN', 'beauroi')).toBe(false)
     expect(canAccessPortal('BEAUROI_EMPLOYEE', 'customer')).toBe(false)
+  })
+})
+
+describe('customer-management contracts', () => {
+  it('normalizes and bounds customer list queries', () => {
+    expect(customerListQuerySchema.parse({ limit: '50', search: '  Acme  ' })).toMatchObject({
+      limit: 50,
+      search: 'Acme',
+      sort: 'name-asc',
+    })
+    expect(customerListQuerySchema.safeParse({ limit: 101 }).success).toBe(false)
+    expect(customerListQuerySchema.safeParse({ unexpected: 'value' }).success).toBe(false)
+  })
+
+  it('rejects malformed cursor, assignment, and health mutations', () => {
+    expect(
+      customerCursorSchema.safeParse({ id: 'not-a-uuid', sort: 'name-asc', value: 'A' }).success,
+    ).toBe(false)
+    expect(
+      assignmentCreateSchema.safeParse({
+        employeeUserId: crypto.randomUUID(),
+        type: 'ACCOUNT_OWNER',
+      }).success,
+    ).toBe(false)
+    expect(healthScoreCreateSchema.safeParse({ reason: '', score: 101 }).success).toBe(false)
+  })
+
+  it('limits invitations and member changes to customer roles', () => {
+    expect(
+      invitationCreateSchema.safeParse({ email: 'ADMIN@EXAMPLE.COM', role: 'BEAUROI_ADMIN' })
+        .success,
+    ).toBe(false)
+    expect(
+      invitationCreateSchema.parse({ email: 'ADMIN@EXAMPLE.COM', role: 'CUSTOMER_MEMBER' }).email,
+    ).toBe('admin@example.com')
+    expect(memberMutationSchema.safeParse({ role: 'BEAUROI_EMPLOYEE' }).success).toBe(false)
   })
 })
 

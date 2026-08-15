@@ -17,6 +17,17 @@ const customerVerifier: AccessTokenVerifier = {
   },
 }
 
+const beauRoiVerifier: AccessTokenVerifier = {
+  verify() {
+    return Promise.resolve({
+      email: 'staff@beauroi.test',
+      organizationId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      role: 'BEAUROI_EMPLOYEE' as const,
+      userId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    })
+  },
+}
+
 const errorResponseSchema = z.object({
   error: z.object({ code: z.string(), message: z.string(), requestId: z.string() }),
 })
@@ -68,5 +79,50 @@ describe('authentication and organization isolation', () => {
     expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe(
       'ORGANIZATION_ACCESS_DENIED',
     )
+  })
+
+  it('blocks customer roles from the Beau Roi customer collection', async () => {
+    const response = await request(createApp(customerVerifier))
+      .get('/v1/customers')
+      .set('authorization', 'Bearer valid-customer')
+      .expect(403)
+    expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe(
+      'BEAUROI_ACCESS_REQUIRED',
+    )
+  })
+
+  it('blocks a cross-organization customer administrator mutation', async () => {
+    const response = await request(createApp(customerVerifier))
+      .patch('/v1/organizations/cccccccc-cccc-4ccc-8ccc-cccccccccccc')
+      .set('authorization', 'Bearer valid-customer')
+      .send({})
+      .expect(403)
+    expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe(
+      'ORGANIZATION_ADMIN_REQUIRED',
+    )
+  })
+
+  it('reports R2 as unavailable without attempting a fake upload', async () => {
+    const response = await request(createApp(beauRoiVerifier))
+      .put('/v1/organizations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/logo')
+      .set('authorization', 'Bearer staff')
+      .set('content-type', 'image/png')
+      .set('x-file-name', 'logo.png')
+      .send(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      .expect(503)
+    expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe(
+      'FILE_STORAGE_NOT_CONFIGURED',
+    )
+  })
+
+  it('returns a consistent error for an oversized logo body', async () => {
+    const response = await request(createApp(beauRoiVerifier))
+      .put('/v1/organizations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/logo')
+      .set('authorization', 'Bearer staff')
+      .set('content-type', 'image/png')
+      .set('x-file-name', 'logo.png')
+      .send(Buffer.alloc(2 * 1024 * 1024 + 1))
+      .expect(413)
+    expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe('PAYLOAD_TOO_LARGE')
   })
 })
