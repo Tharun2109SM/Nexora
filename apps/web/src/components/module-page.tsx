@@ -3,6 +3,8 @@ import { Inbox } from 'lucide-react'
 import type { NavigationItem } from '@/lib/navigation'
 import { EmptyState, PageHeader } from '@/components/ui'
 
+import { NavigationIcon } from './navigation-icon'
+
 interface ModulePageProps {
   count: number
   item: NavigationItem
@@ -21,7 +23,7 @@ export function ModulePage({ count, item, portal }: ModulePageProps) {
       {isEmpty ? (
         <EmptyState
           description={`There are no ${item.label.toLowerCase()} records available for this workspace yet. This page will become actionable when the module is implemented in a later milestone.`}
-          icon={<item.icon aria-hidden size={19} />}
+          icon={<NavigationIcon aria-hidden icon={item.icon} size={19} />}
           note="No sample customer or operational data has been inserted."
           title={`No ${item.label.toLowerCase()} yet`}
         />

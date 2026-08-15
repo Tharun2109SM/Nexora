@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import type { Viewer } from '@/lib/viewer'
 
 import { Brand } from './brand'
+import { NavigationIcon } from './navigation-icon'
 import { ThemeToggle } from './theme-toggle'
 
 interface AppShellProps {
@@ -84,11 +85,12 @@ export function AppShell({ children, navigation, portalLabel, viewer }: AppShell
                   onClick={() => setMobileOpen(false)}
                   title={desktopCompact ? item.label : undefined}
                 >
-                  <item.icon
+                  <NavigationIcon
                     aria-hidden
                     className={
                       active ? 'text-[#91a9ef]' : 'text-[#7d889b] group-hover:text-[#aeb9cb]'
                     }
+                    icon={item.icon}
                     size={18}
                     strokeWidth={1.8}
                   />

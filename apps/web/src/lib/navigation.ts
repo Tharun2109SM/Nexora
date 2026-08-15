@@ -1,74 +1,75 @@
-import {
-  BarChart3,
-  BookOpen,
-  Building2,
-  CircleGauge,
-  ClipboardCheck,
-  Headphones,
-  LayoutDashboard,
-  MessageSquareText,
-  PackageOpen,
-  Rocket,
-  Settings,
-  UsersRound,
-  type LucideIcon,
-} from 'lucide-react'
+export const navigationIconIds = [
+  'analytics',
+  'customers',
+  'dashboard',
+  'feedback',
+  'implementation',
+  'knowledge-base',
+  'onboarding',
+  'organization',
+  'overview',
+  'releases',
+  'settings',
+  'support',
+] as const
+
+export type NavigationIconId = (typeof navigationIconIds)[number]
 
 export interface NavigationItem {
   description: string
   href: string
-  icon: LucideIcon
+  icon: NavigationIconId
   label: string
 }
 
 export const beauroiNavigation: readonly NavigationItem[] = [
-  { description: 'Portfolio overview', href: '/beauroi', icon: LayoutDashboard, label: 'Overview' },
+  { description: 'Portfolio overview', href: '/beauroi', icon: 'overview', label: 'Overview' },
   {
     description: 'Customer companies and owners',
     href: '/beauroi/customers',
-    icon: Building2,
+    icon: 'customers',
     label: 'Customers',
   },
   {
     description: 'Plans, tasks, training, and documents',
     href: '/beauroi/onboarding',
-    icon: ClipboardCheck,
+    icon: 'onboarding',
     label: 'Onboarding',
   },
   {
     description: 'Projects and milestones',
     href: '/beauroi/implementation',
-    icon: Rocket,
+    icon: 'implementation',
     label: 'Implementation',
   },
   {
     description: 'Tickets, messages, and SLAs',
     href: '/beauroi/support',
-    icon: Headphones,
+    icon: 'support',
     label: 'Product support',
   },
   {
     description: 'Feedback, bugs, and feature requests',
     href: '/beauroi/feedback',
-    icon: MessageSquareText,
+    icon: 'feedback',
     label: 'Feedback',
   },
   {
     description: 'Product updates and maintenance',
     href: '/beauroi/releases',
-    icon: PackageOpen,
+    icon: 'releases',
     label: 'Releases',
   },
   {
     description: 'Health and adoption signals',
     href: '/beauroi/analytics',
-    icon: BarChart3,
+    icon: 'analytics',
     label: 'Analytics & success',
   },
   {
     description: 'Customer and internal guidance',
     href: '/beauroi/knowledge-base',
-    icon: BookOpen,
+    icon: 'knowledge-base',
     label: 'Knowledge base',
   },
 ]
@@ -77,55 +78,55 @@ export const customerNavigation: readonly NavigationItem[] = [
   {
     description: 'Your current priorities',
     href: '/portal',
-    icon: CircleGauge,
+    icon: 'dashboard',
     label: 'Dashboard',
   },
   {
     description: 'Assigned plans and actions',
     href: '/portal/onboarding',
-    icon: ClipboardCheck,
+    icon: 'onboarding',
     label: 'My onboarding',
   },
   {
     description: 'Projects and milestones',
     href: '/portal/implementation',
-    icon: Rocket,
+    icon: 'implementation',
     label: 'Implementation status',
   },
   {
     description: 'Tickets and conversations',
     href: '/portal/support',
-    icon: Headphones,
+    icon: 'support',
     label: 'Support center',
   },
   {
     description: 'Ideas, bugs, and requests',
     href: '/portal/feedback',
-    icon: MessageSquareText,
+    icon: 'feedback',
     label: 'Feedback & requests',
   },
   {
     description: 'Updates and maintenance',
     href: '/portal/releases',
-    icon: PackageOpen,
+    icon: 'releases',
     label: 'Product releases',
   },
   {
     description: 'Guides and documentation',
     href: '/portal/knowledge-base',
-    icon: BookOpen,
+    icon: 'knowledge-base',
     label: 'Knowledge base',
   },
   {
     description: 'Company details and team',
     href: '/portal/organization',
-    icon: UsersRound,
+    icon: 'organization',
     label: 'Organization',
   },
   {
     description: 'Profile and preferences',
     href: '/portal/settings',
-    icon: Settings,
+    icon: 'settings',
     label: 'Settings',
   },
 ]
