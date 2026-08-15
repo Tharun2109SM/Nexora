@@ -1,0 +1,25 @@
+{
+  "name": "nexora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NEXORA product operations and customer success platform",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --parallel --filter @nexora/web --filter @nexora/api dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "prettier": "3.9.6",
+    "supabase": "2.114.0",
+    "typescript": "6.0.3"
+  }
+}
