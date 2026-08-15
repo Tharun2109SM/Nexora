@@ -2,7 +2,7 @@
 
 NEXORA is Beau Roi Technologies Private Limited's B2B product-operations and customer-success platform. It gives Beau Roi employees and customer-company teams a shared, organization-isolated workspace for onboarding, implementation, support, feedback, releases, analytics, and documentation.
 
-This repository contains the first development milestone: the secure platform foundation, public/authentication experience, tenant-aware portal shells, database schema, and deployable API—not the completed business workflows.
+This repository contains the secure platform foundation and Milestone 2 customer-management and organization-administration workflows. Other product-operations modules remain intentionally staged.
 
 ## Milestone status
 
@@ -17,13 +17,15 @@ Implemented:
 - Extensible PostgreSQL schema for every requested product-operations domain
 - Express API with health/readiness checks, validated JWTs, organization-scope enforcement, request IDs, rate limiting, security headers, and consistent errors
 - Docker, Render Blueprint, Vercel, GitHub Actions, strict TypeScript, linting, formatting, tests, and environment examples
+- Beau Roi customer portfolio search/filter/keyset pagination, customer detail, lifecycle, health, assignment history, people, and audit activity
+- Customer organization profile/member administration and secure single-use invitation links
+- Feature-gated private Cloudflare R2 company-logo upload/proxy support
 
 Deferred intentionally:
 
 - Complete onboarding, implementation, ticketing, feedback, release, analytics, and knowledge-base workflows
 - Chart.js screens (analytics is currently an empty-state destination)
-- Cloudflare R2 upload/presign workflows; the schema and server-only environment boundary are prepared
-- Customer user invitation and administration workflows
+- SMTP invitation delivery (secure copyable links are available until a provider is approved)
 - Final company-approved Terms and Privacy text
 
 ## Architecture
@@ -36,7 +38,7 @@ flowchart LR
   Web -->|RLS-protected Data API| DB["Supabase PostgreSQL"]
   API -->|Verify JWT + caller-scoped queries| Auth
   API -->|RLS-protected Data API| DB
-  API -.->|Future presigned object operations| R2["Cloudflare R2"]
+  API -.->|Private logo upload and authorized proxy| R2["Cloudflare R2"]
   GitHub["GitHub + Actions"] --> Web
   GitHub --> API
 ```
@@ -46,7 +48,7 @@ Responsibilities remain deliberately narrow:
 | Service             | Responsibility                                                                             |
 | ------------------- | ------------------------------------------------------------------------------------------ |
 | Vercel / Next.js    | Public site, server-rendered application UI, cookie session lifecycle, role-aware routing  |
-| Render / Express    | Validated business API boundary, JWT verification, tenant authorization, future R2 signing |
+| Render / Express    | Validated business API boundary, JWT verification, tenant authorization, private R2 access |
 | Supabase Auth       | Password hashing, email verification, access and refresh tokens                            |
 | Supabase PostgreSQL | Business data, constraints, roles/memberships, database-enforced tenant isolation          |
 | Cloudflare R2       | Future private logos, documents, ticket attachments, and knowledge-base files              |
@@ -183,13 +185,16 @@ The Next.js proxy verifies claims to protect authenticated route groups. Each po
 
 ## Database and migrations
 
-The initial migration is:
+The migrations are:
 
 ```text
 supabase/migrations/20260814183342_initial_nexora_foundation.sql
+supabase/migrations/20260815090632_customer_management_organization_admin.sql
 ```
 
 It creates core organizations, profiles, role definitions, memberships, and the requested extensible domain tables. Every exposed table has RLS enabled. Organization-owned tables include `organization_id`, indexed foreign keys, timezone-aware timestamps, constraints, and conservative policies.
+
+Milestone 2 permissions, endpoints, invitation lifecycle, audit behavior, R2 setup, and safe deployment order are documented in [docs/milestone-2.md](docs/milestone-2.md).
 
 Important policy behavior:
 
@@ -229,11 +234,13 @@ pnpm exec supabase db lint
 pnpm exec supabase db advisors
 ```
 
+Milestone 2 also includes populated-Milestone-1 and concurrent-invitation fixtures under `supabase/compatibility`. These are local-only destructive database checks; run them only against the Supabase CLI development stack as described in `docs/milestone-2.md`.
+
 Build the API container from the repository root:
 
 ```bash
-docker build -f apps/api/Dockerfile -t nexora-api:milestone-1 .
-docker run --rm -p 4000:4000 --env-file apps/api/.env nexora-api:milestone-1
+docker build -f apps/api/Dockerfile -t nexora-api:milestone-2 .
+docker run --rm -p 4000:4000 --env-file apps/api/.env nexora-api:milestone-2
 ```
 
 ## Cloud deployment

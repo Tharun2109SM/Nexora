@@ -8,16 +8,25 @@ import pino from 'pino'
 import { pinoHttp } from 'pino-http'
 
 import { environment } from './lib/env.js'
-import { errorHandler, notFoundHandler } from './lib/errors.js'
+import { AppError, errorHandler, notFoundHandler } from './lib/errors.js'
 import { SupabaseAccessTokenVerifier } from './lib/supabase-verifier.js'
 import { authenticate } from './middleware/auth.js'
 import { healthRouter } from './routes/health.js'
+import { customersRouter } from './routes/customers.js'
+import { logosRouter } from './routes/logos.js'
 import { meRouter } from './routes/me.js'
+import { organizationsRouter } from './routes/organizations.js'
 import type { AccessTokenVerifier } from './types.js'
 
 export function createApp(verifier: AccessTokenVerifier = new SupabaseAccessTokenVerifier()) {
   const app = express()
-  const logger = pino({ level: environment.LOG_LEVEL })
+  const logger = pino({
+    level: environment.LOG_LEVEL,
+    redact: {
+      censor: '[Redacted]',
+      paths: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'],
+    },
+  })
 
   app.disable('x-powered-by')
   app.set('trust proxy', 1)
@@ -45,7 +54,7 @@ export function createApp(verifier: AccessTokenVerifier = new SupabaseAccessToke
   app.use(helmet())
   app.use(
     cors({
-      allowedHeaders: ['authorization', 'content-type', 'x-request-id'],
+      allowedHeaders: ['authorization', 'content-type', 'x-file-name', 'x-request-id'],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       origin: environment.WEB_APP_URL,
@@ -54,6 +63,9 @@ export function createApp(verifier: AccessTokenVerifier = new SupabaseAccessToke
   app.use(express.json({ limit: '1mb' }))
   app.use(
     rateLimit({
+      handler(_request, _response, next) {
+        next(new AppError(429, 'RATE_LIMITED', 'Too many requests. Try again later.'))
+      },
       legacyHeaders: false,
       limit: environment.NODE_ENV === 'test' ? 1000 : 150,
       standardHeaders: 'draft-8',
@@ -62,7 +74,14 @@ export function createApp(verifier: AccessTokenVerifier = new SupabaseAccessToke
   )
 
   app.use(healthRouter)
-  app.use('/v1', authenticate(verifier), meRouter)
+  app.use(
+    '/v1',
+    authenticate(verifier),
+    meRouter,
+    customersRouter,
+    organizationsRouter,
+    logosRouter,
+  )
   app.use(notFoundHandler)
   app.use(errorHandler)
   return app

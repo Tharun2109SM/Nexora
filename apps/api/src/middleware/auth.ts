@@ -14,11 +14,51 @@ export function authenticate(verifier: AccessTokenVerifier) {
       const token = authorization.slice('Bearer '.length).trim()
       if (!token) throw new AppError(401, 'AUTH_REQUIRED', 'A valid bearer token is required.')
       request.identity = await verifier.verify(token)
+      request.accessToken = token
       next()
     } catch (error) {
       next(error)
     }
   }
+}
+
+export function requireBeauRoi(request: Request, _response: Response, next: NextFunction) {
+  if (!request.identity) {
+    next(new AppError(401, 'AUTH_REQUIRED', 'Authentication is required.'))
+    return
+  }
+  if (!['BEAUROI_ADMIN', 'BEAUROI_EMPLOYEE'].includes(request.identity.role)) {
+    next(new AppError(403, 'BEAUROI_ACCESS_REQUIRED', 'Beau Roi access is required.'))
+    return
+  }
+  next()
+}
+
+export function requireOrganizationAdmin(
+  request: Request,
+  _response: Response,
+  next: NextFunction,
+) {
+  const identity = request.identity
+  const organizationId = request.params.organizationId
+  if (!identity) {
+    next(new AppError(401, 'AUTH_REQUIRED', 'Authentication is required.'))
+    return
+  }
+  const beauRoiAdmin = identity.role === 'BEAUROI_ADMIN'
+  const ownCustomerAdmin =
+    identity.role === 'CUSTOMER_ADMIN' && identity.organizationId === organizationId
+  if (!beauRoiAdmin && !ownCustomerAdmin) {
+    next(
+      new AppError(
+        403,
+        'ORGANIZATION_ADMIN_REQUIRED',
+        'Organization administrator access is required.',
+      ),
+    )
+    return
+  }
+  next()
 }
 
 export function requireOrganizationAccess(

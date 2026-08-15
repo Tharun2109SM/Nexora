@@ -9,6 +9,7 @@ export interface AuthenticatedIdentity {
 
 declare module 'express-serve-static-core' {
   interface Request {
+    accessToken?: string
     identity?: AuthenticatedIdentity
     requestId: string
   }

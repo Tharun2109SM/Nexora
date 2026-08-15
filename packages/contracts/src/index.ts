@@ -88,3 +88,230 @@ export const apiErrorSchema = z.object({
 })
 
 export type ApiError = z.infer<typeof apiErrorSchema>
+
+export const lifecycleStatuses = ['DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'] as const
+export const lifecycleStatusSchema = z.enum(lifecycleStatuses)
+export type LifecycleStatus = z.infer<typeof lifecycleStatusSchema>
+
+export const customerAssignmentTypes = ['CSM', 'IMPLEMENTATION_ENGINEER'] as const
+export const customerAssignmentTypeSchema = z.enum(customerAssignmentTypes)
+export type CustomerAssignmentType = z.infer<typeof customerAssignmentTypeSchema>
+
+export const customerMemberRoles = ['CUSTOMER_ADMIN', 'CUSTOMER_MEMBER'] as const
+export const customerMemberRoleSchema = z.enum(customerMemberRoles)
+export type CustomerMemberRole = z.infer<typeof customerMemberRoleSchema>
+
+export const customerListQuerySchema = z
+  .object({
+    assignment: z.enum(['assigned', 'unassigned']).optional(),
+    country: z.string().trim().min(1).max(100).optional(),
+    cursor: z.string().trim().min(1).max(1024).optional(),
+    healthBand: z.enum(['healthy', 'watch', 'at-risk', 'unassessed']).optional(),
+    industry: z.string().trim().min(1).max(100).optional(),
+    lifecycle: lifecycleStatusSchema.optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    search: z.string().trim().max(160).optional(),
+    sort: z.enum(['name-asc', 'name-desc', 'newest', 'oldest']).default('name-asc'),
+  })
+  .strict()
+export type CustomerListQuery = z.infer<typeof customerListQuerySchema>
+
+export const customerCursorSchema = z
+  .object({ id: z.uuid(), sort: customerListQuerySchema.shape.sort, value: z.string().min(1) })
+  .strict()
+export type CustomerCursor = z.infer<typeof customerCursorSchema>
+
+const nullableText = z.string().nullable()
+export const customerSummarySchema = z
+  .object({
+    companySize: nullableText,
+    country: nullableText,
+    createdAt: z.iso.datetime({ offset: true }),
+    currentProductVersion: nullableText,
+    csmName: nullableText,
+    healthScore: z.number().min(0).max(100).nullable(),
+    id: z.uuid(),
+    implementationEngineerName: nullableText,
+    industry: nullableText,
+    lastActivityAt: z.iso.datetime({ offset: true }).nullable(),
+    lifecycleStatus: lifecycleStatusSchema,
+    logoAvailable: z.boolean(),
+    name: z.string(),
+    openTicketCount: z.number().int().nonnegative(),
+  })
+  .strict()
+export type CustomerSummary = z.infer<typeof customerSummarySchema>
+
+export const customerListResponseSchema = z
+  .object({
+    data: z.array(customerSummarySchema),
+    meta: z.object({ nextCursor: z.string().nullable() }).strict(),
+  })
+  .strict()
+export type CustomerListResponse = z.infer<typeof customerListResponseSchema>
+
+export const organizationProfileSchema = z
+  .object({
+    companySize: nullableText,
+    country: nullableText,
+    id: z.uuid(),
+    industry: nullableText,
+    lifecycleStatus: lifecycleStatusSchema,
+    logoAvailable: z.boolean(),
+    name: z.string(),
+    website: nullableText,
+  })
+  .strict()
+export type OrganizationProfile = z.infer<typeof organizationProfileSchema>
+
+export const organizationProfileUpdateSchema = z
+  .object({
+    companySize: z.enum(companySizes).nullable(),
+    country: z.string().trim().min(2).max(100).nullable(),
+    industry: z.string().trim().min(2).max(100).nullable(),
+    name: z.string().trim().min(2).max(160),
+    website: z.union([z.url().max(2048), z.literal(''), z.null()]),
+  })
+  .strict()
+export type OrganizationProfileUpdate = z.infer<typeof organizationProfileUpdateSchema>
+
+export const lifecycleUpdateSchema = z.object({ status: lifecycleStatusSchema }).strict()
+export type LifecycleUpdate = z.infer<typeof lifecycleUpdateSchema>
+
+export const healthScoreCreateSchema = z
+  .object({ reason: z.string().trim().min(3).max(1000), score: z.number().min(0).max(100) })
+  .strict()
+export type HealthScoreCreate = z.infer<typeof healthScoreCreateSchema>
+
+export const assignmentCreateSchema = z
+  .object({
+    employeeUserId: z.uuid(),
+    internalNote: z.string().trim().max(1000).nullable().optional(),
+    type: customerAssignmentTypeSchema,
+  })
+  .strict()
+export type AssignmentCreate = z.infer<typeof assignmentCreateSchema>
+
+export const membershipStatusSchema = z.enum(['INVITED', 'ACTIVE', 'SUSPENDED', 'REMOVED'])
+export const memberMutationSchema = z
+  .object({
+    role: customerMemberRoleSchema.optional(),
+    status: z.enum(['ACTIVE', 'SUSPENDED', 'REMOVED']).optional(),
+  })
+  .strict()
+  .refine(
+    (value) => value.role !== undefined || value.status !== undefined,
+    'Provide a role or status change',
+  )
+export type MemberMutation = z.infer<typeof memberMutationSchema>
+
+export const invitationCreateSchema = z
+  .object({
+    email: z
+      .email()
+      .trim()
+      .max(320)
+      .transform((value) => value.toLowerCase()),
+    expiresInDays: z.number().int().min(1).max(30).default(7),
+    role: customerMemberRoleSchema,
+  })
+  .strict()
+export type InvitationCreate = z.infer<typeof invitationCreateSchema>
+
+export const invitationAcceptSchema = z.object({ token: z.string().min(32).max(512) }).strict()
+export type InvitationAccept = z.infer<typeof invitationAcceptSchema>
+
+export const invitationStatusSchema = z.enum(['PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED'])
+
+export const organizationMemberSchema = z
+  .object({
+    id: z.uuid(),
+    joined_at: z.iso.datetime({ offset: true }).nullable(),
+    profiles: z
+      .object({ designation: z.string().nullable(), full_name: z.string() })
+      .strict()
+      .nullable(),
+    role: appRoleSchema,
+    status: membershipStatusSchema,
+    user_id: z.uuid(),
+  })
+  .strict()
+
+export const customerAssignmentSchema = z
+  .object({
+    assigned_at: z.iso.datetime({ offset: true }),
+    assigned_by: z.uuid().nullable(),
+    assignment_type: z.string(),
+    employee_user_id: z.uuid(),
+    ended_at: z.iso.datetime({ offset: true }).nullable(),
+    id: z.uuid(),
+    is_active: z.boolean(),
+  })
+  .strict()
+
+export const healthScoreSchema = z
+  .object({
+    calculated_at: z.iso.datetime({ offset: true }),
+    calculated_by: z.uuid().nullable(),
+    id: z.uuid(),
+    reason: z.string(),
+    score: z.coerce.number().min(0).max(100),
+    source: z.enum(['MANUAL', 'SYSTEM', 'IMPORT']),
+  })
+  .strict()
+
+export const auditEventSchema = z
+  .object({
+    action: z.string(),
+    actor_role: appRoleSchema.nullable(),
+    actor_user_id: z.uuid().nullable(),
+    entity_id: z.uuid().nullable(),
+    entity_type: z.string(),
+    id: z.uuid(),
+    metadata: z.record(z.string(), z.unknown()),
+    occurred_at: z.iso.datetime({ offset: true }),
+    request_id: z.string().nullable(),
+  })
+  .strict()
+
+export const customerDetailResponseSchema = z
+  .object({
+    data: z
+      .object({
+        assignmentNotes: z.array(z.object({ assignment_id: z.uuid(), note: z.string() }).strict()),
+        assignmentProfiles: z.array(
+          z
+            .object({ designation: z.string().nullable(), full_name: z.string(), id: z.uuid() })
+            .strict(),
+        ),
+        assignments: z.array(customerAssignmentSchema),
+        auditEvents: z.array(auditEventSchema),
+        healthHistory: z.array(healthScoreSchema),
+        members: z.array(organizationMemberSchema),
+        organization: organizationProfileSchema,
+        subscriptions: z.array(z.unknown()),
+      })
+      .strict(),
+  })
+  .strict()
+
+export const invitationSchema = z
+  .object({
+    accepted_at: z.iso.datetime({ offset: true }).nullable(),
+    created_at: z.iso.datetime({ offset: true }),
+    expires_at: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+    intended_role: customerMemberRoleSchema,
+    normalized_email: z.email(),
+    revoked_at: z.iso.datetime({ offset: true }).nullable(),
+    status: invitationStatusSchema,
+  })
+  .strict()
+
+export const idParameterSchema = z.object({ organizationId: z.uuid() }).strict()
+export const membershipParameterSchema = z
+  .object({ membershipId: z.uuid(), organizationId: z.uuid() })
+  .strict()
+export const invitationParameterSchema = z
+  .object({ invitationId: z.uuid(), organizationId: z.uuid() })
+  .strict()

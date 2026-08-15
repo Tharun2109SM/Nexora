@@ -9,7 +9,7 @@ import { redirect } from 'next/navigation'
 export const metadata: Metadata = { title: 'Sign in' }
 
 interface LoginPageProps {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; next?: string }>
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
@@ -26,7 +26,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <p className="mt-3 text-sm leading-6 text-muted">
         Use your authorized work account to open the correct workspace.
       </p>
-      <LoginForm verificationError={query.error === 'verification'} />
+      <LoginForm
+        {...(query.next === undefined ? {} : { next: query.next })}
+        verificationError={query.error === 'verification'}
+      />
       <p className="mt-7 border-t border-border pt-6 text-center text-sm text-muted">
         New customer organization?{' '}
         <Link className="font-semibold text-accent hover:underline" href="/register">
