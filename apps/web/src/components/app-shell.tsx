@@ -3,7 +3,7 @@
 import { ChevronRight, LogOut, Menu, PanelLeftClose, X } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import { signOutAction } from '@/app/auth/actions'
 import type { NavigationItem } from '@/lib/navigation'
@@ -38,10 +38,37 @@ function roleLabel(role: Viewer['role']): string {
     .join(' ')
 }
 
+function subscribeToDesktop(listener: () => void): () => void {
+  const mediaQuery = window.matchMedia('(min-width: 1024px)')
+  mediaQuery.addEventListener('change', listener)
+  return () => mediaQuery.removeEventListener('change', listener)
+}
+
+function getDesktopSnapshot(): boolean {
+  return window.matchMedia('(min-width: 1024px)').matches
+}
+
 export function AppShell({ children, navigation, portalLabel, viewer }: AppShellProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [desktopCompact, setDesktopCompact] = useState(false)
+  const isDesktop = useSyncExternalStore(subscribeToDesktop, getDesktopSnapshot, () => true)
+  const closeNavigationRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!mobileOpen || isDesktop) return
+    const previousFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeNavigationRef.current?.focus()
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      previousFocus?.focus()
+    }
+  }, [isDesktop, mobileOpen])
 
   const sidebar = (
     <>
@@ -51,6 +78,7 @@ export function AppShell({ children, navigation, portalLabel, viewer }: AppShell
           aria-label="Close navigation"
           className="grid size-8 place-items-center rounded-md text-[#9ba5b5] hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8ea6ed] lg:hidden"
           onClick={() => setMobileOpen(false)}
+          ref={closeNavigationRef}
           type="button"
         >
           <X aria-hidden size={18} />
@@ -136,11 +164,13 @@ export function AppShell({ children, navigation, portalLabel, viewer }: AppShell
   return (
     <div className="min-h-screen bg-canvas lg:flex">
       <aside
+        aria-hidden={!isDesktop && !mobileOpen}
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex w-[17.5rem] flex-col bg-[#111722] shadow-2xl transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:shadow-none',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
           desktopCompact && 'lg:w-[4.5rem]',
         )}
+        inert={!isDesktop && !mobileOpen}
       >
         {sidebar}
       </aside>
