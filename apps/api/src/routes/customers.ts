@@ -1,9 +1,11 @@
 import {
   assignmentCreateSchema,
+  canManageStaffInvitations,
   customerCursorSchema,
   customerListQuerySchema,
   healthScoreCreateSchema,
   idParameterSchema,
+  invitationSchema,
   lifecycleUpdateSchema,
   organizationProfileUpdateSchema,
 } from '@nexora/contracts'
@@ -11,6 +13,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import { AppError } from '../lib/errors.js'
+import { isR2Configured } from '../lib/env.js'
 import { createCallerClient, throwDatabaseError } from '../lib/supabase.js'
 import { requireBeauRoi, requireOrganizationAccess } from '../middleware/auth.js'
 
@@ -179,6 +182,9 @@ customersRouter.get(
     try {
       const { organizationId } = idParameterSchema.parse(request.params)
       const supabase = createCallerClient(request.accessToken)
+      const canManageInvitations = request.identity
+        ? canManageStaffInvitations(request.identity.role)
+        : false
       const [
         organizationResult,
         membersResult,
@@ -186,6 +192,7 @@ customersRouter.get(
         healthResult,
         auditResult,
         subscriptionsResult,
+        invitationsResult,
       ] = await Promise.all([
         supabase
           .from('organizations')
@@ -225,6 +232,11 @@ customersRouter.get(
           .from('customer_subscriptions')
           .select('id, status, starts_on, ends_on, products(name, code)')
           .eq('organization_id', organizationId),
+        canManageInvitations
+          ? supabase.rpc('list_organization_invitations', {
+              target_organization_id: organizationId,
+            })
+          : Promise.resolve({ data: [], error: null }),
       ])
       throwDatabaseError(organizationResult.error, 'Customer not found.')
       for (const result of [
@@ -233,6 +245,7 @@ customersRouter.get(
         healthResult,
         auditResult,
         subscriptionsResult,
+        invitationsResult,
       ]) {
         throwDatabaseError(result.error, 'Unable to load customer details.')
       }
@@ -240,6 +253,7 @@ customersRouter.get(
       const assignmentRows = assignmentIdentityRowsSchema.parse(assignmentsResult.data ?? [])
       const employeeIds = [...new Set(assignmentRows.map((row) => row.employee_user_id))]
       const memberRows = memberRowsSchema.parse(membersResult.data ?? [])
+      const invitationRows = invitationSchema.array().parse(invitationsResult.data ?? [])
       const assignmentProfilesResult =
         employeeIds.length === 0
           ? { data: [], error: null }
@@ -281,7 +295,16 @@ customersRouter.get(
           assignmentNotes: assignmentNotes.data ?? [],
           assignmentProfiles: assignmentProfilesResult.data ?? [],
           auditEvents: auditResult.data ?? [],
+          canManageInvitations,
           healthHistory: healthResult.data ?? [],
+          invitations: invitationRows.map((invitation) => ({
+            ...invitation,
+            status:
+              invitation.status === 'PENDING' &&
+              new Date(invitation.expires_at).getTime() <= Date.now()
+                ? 'EXPIRED'
+                : invitation.status,
+          })),
           members: memberRows.map((member) => ({
             ...member,
             profiles: memberProfiles.has(member.user_id)
@@ -301,6 +324,7 @@ customersRouter.get(
             name: organization.name,
             website: organization.website,
           },
+          storage: { logoUploadsAvailable: isR2Configured },
           subscriptions: subscriptionsResult.data ?? [],
         },
       })

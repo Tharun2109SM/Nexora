@@ -1,6 +1,5 @@
 import { BriefcaseBusiness, Building2, MailPlus, ShieldCheck, Users } from 'lucide-react'
 import type { Metadata } from 'next'
-import { z } from 'zod'
 
 import {
   createInvitation,
@@ -13,66 +12,10 @@ import { ConfirmSubmit } from '@/components/confirm-submit'
 import { CopyField } from '@/components/copy-field'
 import { PageHeader } from '@/components/ui'
 import { apiRequest } from '@/lib/api'
+import { organizationResponseSchema } from '@/lib/organization-data'
 import { requireViewer } from '@/lib/viewer'
 
 export const metadata: Metadata = { title: 'Organization administration' }
-const organizationSchema = z.object({
-  data: z.object({
-    assignments: z.array(
-      z
-        .object({
-          assigned_at: z.string(),
-          assignment_type: z.string(),
-          employee_user_id: z.uuid(),
-          id: z.uuid(),
-        })
-        .loose(),
-    ),
-    assignmentProfiles: z.array(
-      z.object({ designation: z.string().nullable(), full_name: z.string(), id: z.uuid() }).loose(),
-    ),
-    invitations: z.array(
-      z
-        .object({
-          accepted_at: z.string().nullable(),
-          created_at: z.string(),
-          expires_at: z.string(),
-          id: z.uuid(),
-          intended_role: z.string(),
-          normalized_email: z.string(),
-          revoked_at: z.string().nullable(),
-          status: z.string(),
-        })
-        .loose(),
-    ),
-    members: z.array(
-      z
-        .object({
-          id: z.uuid(),
-          joined_at: z.string().nullable(),
-          profiles: z
-            .object({ designation: z.string().nullable(), full_name: z.string() })
-            .nullable(),
-          role: z.string(),
-          status: z.string(),
-          user_id: z.uuid(),
-        })
-        .loose(),
-    ),
-    organization: z.object({
-      company_size: z.string().nullable(),
-      country: z.string().nullable(),
-      id: z.uuid(),
-      industry: z.string().nullable(),
-      lifecycle_status: z.string(),
-      logo_available: z.boolean(),
-      name: z.string(),
-      website: z.string().nullable(),
-    }),
-    storage: z.object({ logoUploadsAvailable: z.boolean() }),
-    subscriptions: z.array(z.unknown()),
-  }),
-})
 const inputClass =
   'h-10 w-full rounded-md border border-border bg-canvas px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
 
@@ -82,7 +25,7 @@ interface OrganizationPageProps {
 
 export default async function OrganizationPage({ searchParams }: OrganizationPageProps) {
   const viewer = await requireViewer('customer')
-  const result = organizationSchema.parse(
+  const result = organizationResponseSchema.parse(
     await apiRequest(`/organizations/${viewer.organizationId}`),
   ).data
   const canAdminister = viewer.role === 'CUSTOMER_ADMIN'

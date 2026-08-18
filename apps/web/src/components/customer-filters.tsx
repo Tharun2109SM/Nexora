@@ -9,7 +9,7 @@ import { customerFilterUrl } from '@/lib/customer-filter-url'
 import { buttonClassName } from './ui'
 
 const selectClass =
-  'h-10 rounded-md border border-border bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+  'h-10 min-w-0 w-full rounded-md border border-border bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
 
 export function CustomerFilters() {
   const router = useRouter()
@@ -22,8 +22,8 @@ export function CustomerFilters() {
   }
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border bg-surface p-4 shadow-card md:grid-cols-2 xl:grid-cols-[minmax(14rem,1fr)_repeat(6,minmax(8rem,auto))_auto]">
-      <label className="relative">
+    <div className="grid gap-3 rounded-lg border border-border bg-surface p-4 shadow-card md:grid-cols-2 xl:grid-cols-[minmax(12rem,1.5fr)_repeat(6,minmax(0,1fr))_auto]">
+      <label className="relative min-w-0">
         <span className="sr-only">Search organizations</span>
         <Search aria-hidden className="absolute top-3 left-3 text-subtle" size={16} />
         <input

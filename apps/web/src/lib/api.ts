@@ -1,6 +1,7 @@
 import { apiErrorSchema } from '@nexora/contracts'
 
 import { getPublicEnvironment } from './env'
+import { fetchApiResponse } from './api-transport'
 import { createClient } from './supabase/server'
 
 export class ApiRequestError extends Error {
@@ -25,13 +26,23 @@ export async function apiRequest(path: string, init?: RequestInit): Promise<unkn
   headers.set('authorization', `Bearer ${accessToken}`)
   headers.set('x-request-id', crypto.randomUUID())
   if (typeof init?.body === 'string') headers.set('content-type', 'application/json')
-  const response = await fetch(`${getPublicEnvironment().NEXT_PUBLIC_API_URL}/v1${path}`, {
-    ...init,
-    cache: 'no-store',
-    headers,
-  })
+  const response = await fetchApiResponse(
+    `${getPublicEnvironment().NEXT_PUBLIC_API_URL}/v1${path}`,
+    {
+      ...init,
+      cache: 'no-store',
+      headers,
+    },
+  )
   if (response.status === 204) return null
-  const body: unknown = await response.json()
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    if (!response.ok)
+      throw new ApiRequestError('The API is temporarily unavailable.', 'UPSTREAM_UNAVAILABLE')
+    throw new ApiRequestError('The API returned an invalid response.', 'API_RESPONSE_INVALID')
+  }
   if (!response.ok) {
     const parsed = apiErrorSchema.safeParse(body)
     throw new ApiRequestError(

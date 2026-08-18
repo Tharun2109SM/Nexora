@@ -87,11 +87,34 @@ export async function createInvitation(organizationId: string, formData: FormDat
     redirect(`/portal/organization?invitation=${encodeURIComponent(invitationUrl)}`)
 }
 
+export async function createStaffInvitation(organizationId: string, formData: FormData) {
+  const response = await apiRequest(`/organizations/${organizationId}/invitations`, {
+    method: 'POST',
+    body: JSON.stringify({
+      email: stringValue(formData, 'email'),
+      expiresInDays: 7,
+      role: stringValue(formData, 'role'),
+    }),
+  })
+  const result = response as { data?: { invitationUrl?: string } }
+  revalidatePath(`/beauroi/customers/${organizationId}`)
+  const invitationUrl = result.data?.invitationUrl
+  if (invitationUrl)
+    redirect(`/beauroi/customers/${organizationId}?invitation=${encodeURIComponent(invitationUrl)}`)
+}
+
 export async function revokeInvitation(organizationId: string, invitationId: string) {
   await apiRequest(`/organizations/${organizationId}/invitations/${invitationId}`, {
     method: 'DELETE',
   })
   revalidatePath('/portal/organization')
+}
+
+export async function revokeStaffInvitation(organizationId: string, invitationId: string) {
+  await apiRequest(`/organizations/${organizationId}/invitations/${invitationId}`, {
+    method: 'DELETE',
+  })
+  revalidatePath(`/beauroi/customers/${organizationId}`)
 }
 
 export async function updateMember(
