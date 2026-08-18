@@ -2,7 +2,7 @@
 
 NEXORA is Beau Roi Technologies Private Limited's B2B product-operations and customer-success platform. It gives Beau Roi employees and customer-company teams a shared, organization-isolated workspace for onboarding, implementation, support, feedback, releases, analytics, and documentation.
 
-This repository contains the secure platform foundation and Milestone 2 customer-management and organization-administration workflows. Other product-operations modules remain intentionally staged.
+This repository contains the secure platform foundation, Milestone 2 customer administration, and Milestone 3 onboarding and implementation workflows. Other product-operations modules remain intentionally staged.
 
 ## Milestone status
 
@@ -20,10 +20,11 @@ Implemented:
 - Beau Roi customer portfolio search/filter/keyset pagination, customer detail, lifecycle, health, assignment history, people, and audit activity
 - Customer organization profile/member administration and secure single-use invitation links
 - Feature-gated private Cloudflare R2 company-logo upload/proxy support
+- Governed onboarding and implementation portfolios, detailed workspaces, customer read-only views, calculated progress, lifecycle guards, and internal-note isolation
 
 Deferred intentionally:
 
-- Complete onboarding, implementation, ticketing, feedback, release, analytics, and knowledge-base workflows
+- Complete ticketing, feedback, release, analytics, and knowledge-base workflows
 - Chart.js screens (analytics is currently an empty-state destination)
 - SMTP invitation delivery (secure copyable links are available until a provider is approved)
 - Final company-approved Terms and Privacy text
@@ -190,11 +191,15 @@ The migrations are:
 ```text
 supabase/migrations/20260814183342_initial_nexora_foundation.sql
 supabase/migrations/20260815090632_customer_management_organization_admin.sql
+supabase/migrations/20260815143152_restrict_rls_auto_enable_execution.sql
+supabase/migrations/20260815145547_milestone_3_onboarding_implementation.sql
 ```
 
 It creates core organizations, profiles, role definitions, memberships, and the requested extensible domain tables. Every exposed table has RLS enabled. Organization-owned tables include `organization_id`, indexed foreign keys, timezone-aware timestamps, constraints, and conservative policies.
 
 Milestone 2 permissions, endpoints, invitation lifecycle, audit behavior, R2 setup, and safe deployment order are documented in [docs/milestone-2.md](docs/milestone-2.md).
+
+Milestone 3 onboarding/implementation workflows, authorization, endpoints, progress rules, internal-note isolation, and deployment order are documented in [docs/milestone-3.md](docs/milestone-3.md).
 
 Important policy behavior:
 
@@ -239,8 +244,8 @@ Milestone 2 also includes populated-Milestone-1 and concurrent-invitation fixtur
 Build the API container from the repository root:
 
 ```bash
-docker build -f apps/api/Dockerfile -t nexora-api:milestone-2 .
-docker run --rm -p 4000:4000 --env-file apps/api/.env nexora-api:milestone-2
+docker build -f apps/api/Dockerfile -t nexora-api:milestone-3 .
+docker run --rm -p 4000:4000 --env-file apps/api/.env nexora-api:milestone-3
 ```
 
 ## Cloud deployment
@@ -264,7 +269,7 @@ docker run --rm -p 4000:4000 --env-file apps/api/.env nexora-api:milestone-2
 ### Render
 
 1. Create a Blueprint from `render.yaml` in the linked GitHub repository.
-2. Select a paid/approved plan and region; the file defaults to `starter` but the company must confirm billing.
+2. Review the Blueprint region and free development instance. Select a paid plan before production load or SLA commitments.
 3. Enter every `sync: false` environment value in Render's encrypted environment settings.
 4. Set `WEB_APP_URL` to the final Vercel origin, not a wildcard.
 5. Render waits for GitHub checks before auto-deploying and uses `/health` for liveness.
@@ -297,4 +302,4 @@ No cloud deployment is performed by this repository alone. Project creation, bil
 
 ## Recommended next milestone
 
-Build **Customer Management and organization administration** first: Beau Roi customer list/detail views, secure customer creation and assignment, customer-admin invitations, organization logo upload through R2, audit events, search/filter/pagination, and end-to-end RLS tests. That milestone creates the governed customer record the remaining onboarding, implementation, and support workflows depend on.
+Build **Product Support** next: customer-scoped tickets, messages, SLA timing, attachment metadata with R2 feature gating, Beau Roi triage, customer read/write boundaries, notifications, audit events, and end-to-end RLS tests.

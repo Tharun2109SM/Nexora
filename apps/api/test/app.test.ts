@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
 import { createApp } from '../src/app.js'
+import {
+  CUSTOMER_IMPLEMENTATION_PROJECT_SELECT,
+  CUSTOMER_PROJECT_NOTE_SELECT,
+} from '../src/routes/workflows.js'
 
 const customerVerifier: AccessTokenVerifier = {
   verify(token) {
@@ -50,6 +54,11 @@ describe('health and error contracts', () => {
 })
 
 describe('authentication and organization isolation', () => {
+  it('allowlists customer implementation fields and omits internal project content', () => {
+    expect(CUSTOMER_IMPLEMENTATION_PROJECT_SELECT).not.toContain('requirement_summary')
+    expect(CUSTOMER_PROJECT_NOTE_SELECT).not.toContain('updated_at')
+    expect(CUSTOMER_PROJECT_NOTE_SELECT).not.toContain('metadata')
+  })
   it('rejects protected routes without a bearer token', async () => {
     const response = await request(createApp(customerVerifier)).get('/v1/me').expect(401)
     expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe('AUTH_REQUIRED')
@@ -89,6 +98,35 @@ describe('authentication and organization isolation', () => {
     expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe(
       'BEAUROI_ACCESS_REQUIRED',
     )
+  })
+
+  it('blocks customer roles from Beau Roi workflow management', async () => {
+    const response = await request(createApp(customerVerifier))
+      .get('/v1/onboarding')
+      .set('authorization', 'Bearer valid-customer')
+      .expect(403)
+    expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe(
+      'BEAUROI_ACCESS_REQUIRED',
+    )
+  })
+
+  it('blocks cross-organization customer implementation reads', async () => {
+    const response = await request(createApp(customerVerifier))
+      .get('/v1/organizations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/implementation')
+      .set('authorization', 'Bearer valid-customer')
+      .expect(403)
+    expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe(
+      'ORGANIZATION_ACCESS_DENIED',
+    )
+  })
+
+  it('rejects malformed workflow payloads before database access', async () => {
+    const response = await request(createApp(beauRoiVerifier))
+      .post('/v1/onboarding')
+      .set('authorization', 'Bearer staff')
+      .send({ name: 'x', organizationId: 'not-a-uuid' })
+      .expect(400)
+    expect(errorResponseSchema.parse(response.body as unknown).error.code).toBe('VALIDATION_ERROR')
   })
 
   it('blocks a cross-organization customer administrator mutation', async () => {

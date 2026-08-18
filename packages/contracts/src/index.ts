@@ -218,6 +218,201 @@ export const invitationCreateSchema = z
   .strict()
 export type InvitationCreate = z.infer<typeof invitationCreateSchema>
 
+export const onboardingStatuses = [
+  'DRAFT',
+  'NOT_STARTED',
+  'IN_PROGRESS',
+  'BLOCKED',
+  'READY_FOR_GO_LIVE',
+  'LIVE',
+  'CANCELLED',
+] as const
+export const onboardingStatusSchema = z.enum(onboardingStatuses)
+export const workflowItemStatuses = [
+  'NOT_STARTED',
+  'IN_PROGRESS',
+  'BLOCKED',
+  'COMPLETED',
+  'CANCELLED',
+] as const
+export const workflowItemStatusSchema = z.enum(workflowItemStatuses)
+export const implementationStatuses = [
+  'DRAFT',
+  'NOT_STARTED',
+  'IN_PROGRESS',
+  'BLOCKED',
+  'COMPLETED',
+  'CANCELLED',
+] as const
+export const implementationStatusSchema = z.enum(implementationStatuses)
+export const implementationPhases = [
+  'DISCOVERY',
+  'REQUIREMENTS',
+  'CONFIGURATION',
+  'INTEGRATION',
+  'VALIDATION',
+  'GO_LIVE',
+  'STABILIZATION',
+  'COMPLETE',
+] as const
+export const implementationPhaseSchema = z.enum(implementationPhases)
+export const trainingStatusSchema = z.enum(['SCHEDULED', 'COMPLETED', 'CANCELLED'])
+export const trainingDeliveryMethodSchema = z.enum(['REMOTE', 'ONSITE', 'HYBRID'])
+export const documentRequestStatusSchema = z.enum([
+  'REQUESTED',
+  'RECEIVED',
+  'ACCEPTED',
+  'REJECTED',
+  'WAIVED',
+])
+export const workflowOwnerKindSchema = z.enum(['BEAUROI', 'CUSTOMER'])
+
+const dateInputSchema = z.iso.date()
+const optionalDateInputSchema = dateInputSchema.nullable().optional()
+const optionalDateTimeInputSchema = z.iso.datetime({ offset: true }).nullable().optional()
+const workflowNameSchema = z.string().trim().min(2).max(160)
+
+export const workflowListQuerySchema = z
+  .object({
+    cursor: z.string().trim().min(1).max(1024).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    organizationId: z.uuid().optional(),
+    ownerUserId: z.uuid().optional(),
+    phase: implementationPhaseSchema.optional(),
+    productId: z.uuid().optional(),
+    search: z.string().trim().max(160).optional(),
+    sort: z.enum(['name-asc', 'name-desc']).default('name-asc'),
+    status: z.union([onboardingStatusSchema, implementationStatusSchema]).optional(),
+  })
+  .strict()
+export type WorkflowListQuery = z.infer<typeof workflowListQuerySchema>
+export const onboardingListQuerySchema = workflowListQuerySchema.extend({
+  phase: z.undefined().optional(),
+  status: onboardingStatusSchema.optional(),
+})
+export const implementationListQuerySchema = workflowListQuerySchema.extend({
+  status: implementationStatusSchema.optional(),
+})
+
+export const workflowCursorSchema = z
+  .object({ id: z.uuid(), sort: workflowListQuerySchema.shape.sort, value: z.string().min(1) })
+  .strict()
+
+export const onboardingPlanCreateSchema = z
+  .object({
+    actualGoLiveOn: optionalDateInputSchema,
+    customerUpdate: z.string().trim().max(4000).nullable().optional(),
+    name: workflowNameSchema,
+    organizationId: z.uuid(),
+    ownerUserId: z.uuid().nullable().optional(),
+    productId: z.uuid(),
+    readinessConfirmedAt: optionalDateTimeInputSchema,
+    startsOn: optionalDateInputSchema,
+    status: onboardingStatusSchema.default('DRAFT'),
+    targetGoLiveOn: optionalDateInputSchema,
+  })
+  .strict()
+export const onboardingPlanUpdateSchema = onboardingPlanCreateSchema
+  .omit({ organizationId: true, productId: true })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one change')
+
+export const onboardingTaskCreateSchema = z
+  .object({
+    assignedUserId: z.uuid().nullable().optional(),
+    completedAt: optionalDateTimeInputSchema,
+    description: z.string().trim().max(5000).nullable().optional(),
+    dueAt: optionalDateTimeInputSchema,
+    ownerKind: workflowOwnerKindSchema.nullable().optional(),
+    sortOrder: z.number().int().min(0).max(100000).default(0),
+    status: workflowItemStatusSchema.default('NOT_STARTED'),
+    title: z.string().trim().min(2).max(200),
+  })
+  .strict()
+export const onboardingTaskUpdateSchema = onboardingTaskCreateSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one change')
+
+export const trainingSessionCreateSchema = z
+  .object({
+    completedAt: optionalDateTimeInputSchema,
+    deliveryMethod: trainingDeliveryMethodSchema.default('REMOTE'),
+    description: z.string().trim().max(5000).nullable().optional(),
+    durationMinutes: z.number().int().min(15).max(1440),
+    facilitatorUserId: z.uuid().nullable().optional(),
+    meetingLocation: z.string().trim().max(500).nullable().optional(),
+    meetingUrl: z.union([z.url().max(2048), z.literal(''), z.null()]).optional(),
+    scheduledAt: z.iso.datetime({ offset: true }),
+    status: trainingStatusSchema.default('SCHEDULED'),
+    title: z.string().trim().min(2).max(200),
+  })
+  .strict()
+export const trainingSessionUpdateSchema = trainingSessionCreateSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one change')
+
+export const requestedDocumentCreateSchema = z
+  .object({
+    description: z.string().trim().max(5000).nullable().optional(),
+    dueAt: optionalDateTimeInputSchema,
+    name: z.string().trim().min(2).max(200),
+    requestedFromUserId: z.uuid().nullable().optional(),
+    status: documentRequestStatusSchema.default('REQUESTED'),
+    submittedAt: optionalDateTimeInputSchema,
+  })
+  .strict()
+export const requestedDocumentUpdateSchema = requestedDocumentCreateSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one change')
+
+export const implementationProjectCreateSchema = z
+  .object({
+    actualCompletionOn: optionalDateInputSchema,
+    customerUpdate: z.string().trim().max(4000).nullable().optional(),
+    name: workflowNameSchema,
+    organizationId: z.uuid(),
+    ownerUserId: z.uuid().nullable().optional(),
+    phase: implementationPhaseSchema.default('DISCOVERY'),
+    productId: z.uuid(),
+    requirementSummary: z.string().trim().min(1).max(20000).nullable().optional(),
+    startsOn: optionalDateInputSchema,
+    status: implementationStatusSchema.default('DRAFT'),
+    targetCompletionOn: optionalDateInputSchema,
+  })
+  .strict()
+export const implementationProjectUpdateSchema = implementationProjectCreateSchema
+  .omit({ organizationId: true, productId: true })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one change')
+
+export const milestoneCreateSchema = z
+  .object({
+    completedAt: optionalDateTimeInputSchema,
+    description: z.string().trim().max(5000).nullable().optional(),
+    dueOn: optionalDateInputSchema,
+    sortOrder: z.number().int().min(0).max(100000).default(0),
+    status: workflowItemStatusSchema.default('NOT_STARTED'),
+    title: z.string().trim().min(2).max(200),
+  })
+  .strict()
+export const milestoneUpdateSchema = milestoneCreateSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one change')
+
+export const projectNoteCreateSchema = z
+  .object({ body: z.string().trim().min(1).max(20000), visibility: z.enum(['INTERNAL', 'SHARED']) })
+  .strict()
+
+export function calculateWorkflowProgress(
+  statuses: readonly z.infer<typeof workflowItemStatusSchema>[],
+): number {
+  const counted = statuses.filter((status) => status !== 'CANCELLED')
+  if (counted.length === 0) return 0
+  return Math.round(
+    (counted.filter((status) => status === 'COMPLETED').length / counted.length) * 100,
+  )
+}
+
 export const invitationAcceptSchema = z.object({ token: z.string().min(32).max(512) }).strict()
 export type InvitationAccept = z.infer<typeof invitationAcceptSchema>
 

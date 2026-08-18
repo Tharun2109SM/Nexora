@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  calculateWorkflowProgress,
   assignmentCreateSchema,
   canAccessOrganization,
   canAccessPortal,
@@ -8,7 +9,10 @@ import {
   customerListQuerySchema,
   healthScoreCreateSchema,
   invitationCreateSchema,
+  implementationProjectCreateSchema,
   memberMutationSchema,
+  onboardingPlanCreateSchema,
+  onboardingTaskCreateSchema,
   portalForRole,
   routeForRole,
 } from '../src/index.js'
@@ -64,6 +68,36 @@ describe('customer-management contracts', () => {
       invitationCreateSchema.parse({ email: 'ADMIN@EXAMPLE.COM', role: 'CUSTOMER_MEMBER' }).email,
     ).toBe('admin@example.com')
     expect(memberMutationSchema.safeParse({ role: 'BEAUROI_EMPLOYEE' }).success).toBe(false)
+  })
+})
+
+describe('workflow contracts and calculations', () => {
+  it('derives progress while excluding cancelled items', () => {
+    expect(calculateWorkflowProgress(['COMPLETED', 'NOT_STARTED', 'CANCELLED'])).toBe(50)
+    expect(calculateWorkflowProgress(['CANCELLED'])).toBe(0)
+  })
+
+  it('rejects malformed and oversized workflow payloads', () => {
+    expect(
+      onboardingPlanCreateSchema.safeParse({
+        name: 'Plan',
+        organizationId: crypto.randomUUID(),
+        productId: crypto.randomUUID(),
+        status: 'UNKNOWN',
+      }).success,
+    ).toBe(false)
+    expect(
+      onboardingTaskCreateSchema.safeParse({ title: 'Task', description: 'x'.repeat(5001) })
+        .success,
+    ).toBe(false)
+    expect(
+      implementationProjectCreateSchema.safeParse({
+        name: 'Implementation',
+        organizationId: crypto.randomUUID(),
+        productId: crypto.randomUUID(),
+        requirementSummary: '   ',
+      }).success,
+    ).toBe(false)
   })
 })
 

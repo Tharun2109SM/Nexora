@@ -16,6 +16,7 @@ import { customersRouter } from './routes/customers.js'
 import { logosRouter } from './routes/logos.js'
 import { meRouter } from './routes/me.js'
 import { organizationsRouter } from './routes/organizations.js'
+import { workflowsRouter } from './routes/workflows.js'
 import type { AccessTokenVerifier } from './types.js'
 
 export function createApp(verifier: AccessTokenVerifier = new SupabaseAccessTokenVerifier()) {
@@ -81,6 +82,7 @@ export function createApp(verifier: AccessTokenVerifier = new SupabaseAccessToke
     customersRouter,
     organizationsRouter,
     logosRouter,
+    workflowsRouter,
   )
   app.use(notFoundHandler)
   app.use(errorHandler)
