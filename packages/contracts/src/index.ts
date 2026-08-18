@@ -78,6 +78,10 @@ export function canAccessOrganization(viewer: ViewerContext, organizationId: str
   return BEAUROI_ROLES.includes(viewer.role) || viewer.organizationId === organizationId
 }
 
+export function canManageStaffInvitations(role: AppRole): boolean {
+  return role === 'BEAUROI_ADMIN'
+}
+
 export const apiErrorSchema = z.object({
   error: z.object({
     code: z.string(),
@@ -469,6 +473,19 @@ export const auditEventSchema = z
   })
   .strict()
 
+export const invitationSchema = z
+  .object({
+    accepted_at: z.iso.datetime({ offset: true }).nullable(),
+    created_at: z.iso.datetime({ offset: true }),
+    expires_at: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+    intended_role: customerMemberRoleSchema,
+    normalized_email: z.email(),
+    revoked_at: z.iso.datetime({ offset: true }).nullable(),
+    status: invitationStatusSchema,
+  })
+  .strict()
+
 export const customerDetailResponseSchema = z
   .object({
     data: z
@@ -481,25 +498,15 @@ export const customerDetailResponseSchema = z
         ),
         assignments: z.array(customerAssignmentSchema),
         auditEvents: z.array(auditEventSchema),
+        canManageInvitations: z.boolean(),
         healthHistory: z.array(healthScoreSchema),
+        invitations: z.array(invitationSchema),
         members: z.array(organizationMemberSchema),
         organization: organizationProfileSchema,
+        storage: z.object({ logoUploadsAvailable: z.boolean() }).strict(),
         subscriptions: z.array(z.unknown()),
       })
       .strict(),
-  })
-  .strict()
-
-export const invitationSchema = z
-  .object({
-    accepted_at: z.iso.datetime({ offset: true }).nullable(),
-    created_at: z.iso.datetime({ offset: true }),
-    expires_at: z.iso.datetime({ offset: true }),
-    id: z.uuid(),
-    intended_role: customerMemberRoleSchema,
-    normalized_email: z.email(),
-    revoked_at: z.iso.datetime({ offset: true }).nullable(),
-    status: invitationStatusSchema,
   })
   .strict()
 

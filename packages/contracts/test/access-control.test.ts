@@ -5,7 +5,9 @@ import {
   assignmentCreateSchema,
   canAccessOrganization,
   canAccessPortal,
+  canManageStaffInvitations,
   customerCursorSchema,
+  customerDetailResponseSchema,
   customerListQuerySchema,
   healthScoreCreateSchema,
   invitationCreateSchema,
@@ -69,6 +71,47 @@ describe('customer-management contracts', () => {
     ).toBe('admin@example.com')
     expect(memberMutationSchema.safeParse({ role: 'BEAUROI_EMPLOYEE' }).success).toBe(false)
   })
+
+  it('rejects protected storage, invitation, note, and requirement fields in customer detail data', () => {
+    const response = {
+      data: {
+        assignmentNotes: [],
+        assignmentProfiles: [],
+        assignments: [],
+        auditEvents: [],
+        canManageInvitations: false,
+        healthHistory: [],
+        invitations: [],
+        members: [],
+        organization: {
+          companySize: null,
+          country: null,
+          id: crypto.randomUUID(),
+          industry: null,
+          lifecycleStatus: 'ACTIVE',
+          logoAvailable: false,
+          name: 'Customer',
+          website: null,
+        },
+        storage: { logoUploadsAvailable: false },
+        subscriptions: [],
+      },
+    }
+
+    expect(customerDetailResponseSchema.safeParse(response).success).toBe(true)
+    for (const [field, value] of [
+      ['token_hash', 'secret'],
+      ['logo_object_key', 'private/logo.png'],
+      ['internal_notes', 'private'],
+      ['requirement_summary', 'private'],
+    ] as const) {
+      expect(
+        customerDetailResponseSchema.safeParse({
+          data: { ...response.data, [field]: value },
+        }).success,
+      ).toBe(false)
+    }
+  })
 })
 
 describe('workflow contracts and calculations', () => {
@@ -127,5 +170,12 @@ describe('organization isolation', () => {
         'organization-b',
       ),
     ).toBe(true)
+  })
+
+  it('limits staff-side invitation administration to Beau Roi administrators', () => {
+    expect(canManageStaffInvitations('BEAUROI_ADMIN')).toBe(true)
+    expect(canManageStaffInvitations('BEAUROI_EMPLOYEE')).toBe(false)
+    expect(canManageStaffInvitations('CUSTOMER_ADMIN')).toBe(false)
+    expect(canManageStaffInvitations('CUSTOMER_MEMBER')).toBe(false)
   })
 })

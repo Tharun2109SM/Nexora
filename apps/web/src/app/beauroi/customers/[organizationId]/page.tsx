@@ -6,23 +6,32 @@ import {
   Clock3,
   HeartPulse,
   History,
+  ImageIcon,
+  MailPlus,
+  ShieldCheck,
   Users,
 } from 'lucide-react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { cache } from 'react'
 import { z } from 'zod'
 
 import {
+  createStaffInvitation,
   recordHealthScore,
   replaceAssignment,
+  revokeStaffInvitation,
   updateCustomerProfile,
   updateLifecycle,
+  uploadLogo,
 } from '@/app/management-actions'
 import { ConfirmSubmit } from '@/components/confirm-submit'
+import { CopyField } from '@/components/copy-field'
 import { HealthIndicator } from '@/components/health-indicator'
 import { PageHeader } from '@/components/ui'
 import { apiRequest, ApiRequestError } from '@/lib/api'
+import { staffCustomerPresentation } from '@/lib/staff-customer-presentation'
 
 const detailSchema = customerDetailResponseSchema
 const staffSchema = z.object({
@@ -32,26 +41,30 @@ const staffSchema = z.object({
 })
 const inputClass =
   'h-10 w-full rounded-md border border-border bg-canvas px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+const getCustomerDetail = cache(async (organizationId: string) =>
+  detailSchema.parse(await apiRequest(`/customers/${organizationId}`)),
+)
 
 interface DetailProps {
   params: Promise<{ organizationId: string }>
+  searchParams: Promise<{ invitation?: string }>
 }
 
 export async function generateMetadata({ params }: DetailProps): Promise<Metadata> {
   const { organizationId } = await params
   try {
-    const result = detailSchema.parse(await apiRequest(`/customers/${organizationId}`))
+    const result = await getCustomerDetail(organizationId)
     return { title: result.data.organization.name }
   } catch {
     return { title: 'Customer detail' }
   }
 }
 
-export default async function CustomerDetailPage({ params }: DetailProps) {
+export default async function CustomerDetailPage({ params, searchParams }: DetailProps) {
   const { organizationId } = await params
   let result: z.infer<typeof detailSchema>
   try {
-    result = detailSchema.parse(await apiRequest(`/customers/${organizationId}`))
+    result = await getCustomerDetail(organizationId)
   } catch (error) {
     if (error instanceof ApiRequestError && error.code === 'NOT_FOUND') notFound()
     throw error
@@ -65,6 +78,8 @@ export default async function CustomerDetailPage({ params }: DetailProps) {
   const noteByAssignmentId = new Map(
     result.data.assignmentNotes.map((item) => [item.assignment_id, item.note]),
   )
+  const invitationLink = (await searchParams).invitation
+  const presentation = staffCustomerPresentation(result.data)
   return (
     <div className="space-y-7">
       <Link
@@ -74,10 +89,22 @@ export default async function CustomerDetailPage({ params }: DetailProps) {
         <ArrowLeft aria-hidden size={15} /> Back to customers
       </Link>
       <PageHeader
-        description="Company profile, customer health, people, ownership, lifecycle, and verified activity."
+        description="Company profile, customer health, access invitations, ownership, lifecycle, and verified activity."
         eyebrow="Customer record"
         title={organization.name}
       />
+      {invitationLink && result.data.canManageInvitations && (
+        <section className="rounded-lg border border-accent/30 bg-accent-soft p-5">
+          <h2 className="font-display text-lg font-semibold">Invitation created</h2>
+          <p className="mt-1 text-sm text-muted">
+            Email delivery is not configured. Copy this secure link now; NEXORA will not show the
+            raw token again.
+          </p>
+          <div className="mt-4">
+            <CopyField value={invitationLink} />
+          </div>
+        </section>
+      )}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Summary icon={<HeartPulse size={17} />} label="Health">
           <HealthIndicator score={latestHealth} />
@@ -124,6 +151,45 @@ export default async function CustomerDetailPage({ params }: DetailProps) {
               <ConfirmSubmit label="Save profile" />
             </div>
           </form>
+        </Panel>
+        <Panel icon={<ImageIcon size={18} />} title="Organization logo">
+          <div className="flex items-center gap-4">
+            <span className="grid size-14 shrink-0 place-items-center rounded-lg bg-accent-soft font-display text-2xl font-semibold text-accent">
+              {organization.name.slice(0, 1).toUpperCase()}
+            </span>
+            <div>
+              <p className="font-semibold">{presentation.logoStatus}</p>
+              <p className="text-xs text-muted">
+                Private storage details and object identifiers are never exposed here.
+              </p>
+            </div>
+          </div>
+          {!presentation.logoUploadUnavailable ? (
+            <form
+              action={uploadLogo.bind(null, organizationId)}
+              className="mt-5 flex flex-wrap items-end gap-3 border-t border-border pt-5"
+            >
+              <label className="grid gap-1.5 text-sm font-medium">
+                PNG, JPEG, or WebP · maximum 2 MB
+                <input
+                  accept="image/png,image/jpeg,image/webp"
+                  className={inputClass}
+                  name="logo"
+                  required
+                  type="file"
+                />
+              </label>
+              <ConfirmSubmit label="Upload logo" />
+            </form>
+          ) : (
+            <div className="mt-5 border-t border-border pt-5">
+              <p className="text-sm font-semibold">Logo upload unavailable</p>
+              <p className="mt-1 text-sm text-muted">
+                Private Cloudflare R2 storage is not configured. Existing customer administration
+                remains available, but NEXORA will not present a non-functional upload control.
+              </p>
+            </div>
+          )}
         </Panel>
         <Panel icon={<Clock3 size={18} />} title="Lifecycle">
           <form
@@ -266,6 +332,65 @@ export default async function CustomerDetailPage({ params }: DetailProps) {
               </div>
             ))}
           </div>
+        </Panel>
+        <Panel icon={<MailPlus size={18} />} title="Invitations">
+          {presentation.invitationControlsVisible ? (
+            <form
+              action={createStaffInvitation.bind(null, organizationId)}
+              className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
+            >
+              <Field label="Work email" name="email" required type="email" />
+              <label className="grid gap-1.5 text-sm font-medium">
+                Role
+                <select className={inputClass} name="role">
+                  <option value="CUSTOMER_MEMBER">Customer member</option>
+                  <option value="CUSTOMER_ADMIN">Customer admin</option>
+                </select>
+              </label>
+              <ConfirmSubmit label="Create invitation" />
+            </form>
+          ) : (
+            <p className="text-sm text-muted">
+              Invitation details and controls are available only to Beau Roi administrators.
+            </p>
+          )}
+          {presentation.invitationControlsVisible && (
+            <div className="mt-5 divide-y divide-border">
+              {result.data.invitations.length === 0 ? (
+                <p className="py-4 text-sm text-muted">{presentation.invitationEmptyState}</p>
+              ) : (
+                result.data.invitations.map((invitation) => (
+                  <div
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                    key={invitation.id}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold">{invitation.normalized_email}</p>
+                      <p className="text-xs text-muted">
+                        {invitation.intended_role.replaceAll('_', ' ')} · {invitation.status}
+                      </p>
+                    </div>
+                    {invitation.status === 'PENDING' && (
+                      <form
+                        action={revokeStaffInvitation.bind(null, organizationId, invitation.id)}
+                      >
+                        <ConfirmSubmit
+                          confirmMessage="Revoke this invitation? Its link will stop working immediately."
+                          label="Revoke"
+                          variant="quiet"
+                        />
+                      </form>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-subtle">
+            <ShieldCheck aria-hidden className="mt-0.5 shrink-0" size={14} /> Invitation tokens are
+            single-use and accepted only by the signed-in account matching the normalized email.
+            Token hashes are never returned to this page.
+          </p>
         </Panel>
         <Panel icon={<History size={18} />} title="Recent activity">
           <div className="divide-y divide-border">
