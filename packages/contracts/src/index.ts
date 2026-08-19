@@ -688,7 +688,7 @@ export const staffSupportTicketDetailSchema = supportTicketDetailBaseSchema
 export const supportNotificationSchema = z
   .object({
     body: z.string(),
-    category: z.literal('SUPPORT'),
+    category: z.enum(['SUPPORT', 'FEEDBACK']),
     createdAt: z.iso.datetime({ offset: true }),
     id: z.uuid(),
     linkPath: z.string().startsWith('/'),
@@ -749,3 +749,185 @@ export const updateSupportPrioritySchema = z
   .strict()
 export const updateSupportCategorySchema = z.object({ categoryId: z.uuid() }).strict()
 export const updateSupportAssigneeSchema = z.object({ assigneeId: z.uuid().nullable() }).strict()
+
+export const feedbackTypeSchema = z.enum(['GENERAL', 'BUG', 'FEATURE_REQUEST'])
+export const feedbackStatusSchema = z.enum([
+  'SUBMITTED',
+  'UNDER_REVIEW',
+  'PLANNED',
+  'IN_PROGRESS',
+  'SHIPPED',
+  'DECLINED',
+])
+export const feedbackSeveritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'])
+export const feedbackPrioritySchema = supportTicketPrioritySchema
+export const feedbackPersonSchema = supportPersonSchema
+export const feedbackRelationSchema = z.object({ id: z.uuid(), name: z.string() }).strict()
+export const feedbackVoteSummarySchema = z
+  .object({ count: z.coerce.number().int().nonnegative(), hasVoted: z.boolean() })
+  .strict()
+export const feedbackCapabilitiesSchema = z
+  .object({
+    canAddInternalNote: z.boolean(),
+    canChangeStatus: z.boolean(),
+    canPublish: z.boolean(),
+    canRespond: z.boolean(),
+    canTriage: z.boolean(),
+  })
+  .strict()
+export const feedbackListItemSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+    isPublic: z.boolean(),
+    lastActivityAt: z.iso.datetime({ offset: true }),
+    organization: feedbackRelationSchema.nullable(),
+    priority: feedbackPrioritySchema.nullable(),
+    product: feedbackRelationSchema,
+    requester: feedbackPersonSchema.nullable(),
+    severity: feedbackSeveritySchema.nullable(),
+    status: feedbackStatusSchema,
+    title: z.string(),
+    type: feedbackTypeSchema,
+    votes: feedbackVoteSummarySchema,
+  })
+  .strict()
+export const feedbackListResponseSchema = z
+  .object({ data: z.array(feedbackListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const feedbackMessageSchema = z
+  .object({
+    author: feedbackPersonSchema.nullable(),
+    body: z.string(),
+    createdAt: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+  })
+  .strict()
+export const staffFeedbackMessageSchema = feedbackMessageSchema
+  .extend({ isInternal: z.boolean() })
+  .strict()
+export const feedbackEventSchema = z
+  .object({
+    actor: feedbackPersonSchema.nullable(),
+    createdAt: z.iso.datetime({ offset: true }),
+    eventType: z.enum([
+      'SUBMITTED',
+      'STATUS_CHANGED',
+      'TRIAGE_UPDATED',
+      'CUSTOMER_RESPONSE_ADDED',
+      'PUBLISHED',
+      'UNPUBLISHED',
+    ]),
+    id: z.uuid(),
+  })
+  .strict()
+export const staffFeedbackEventSchema = feedbackEventSchema
+  .extend({
+    customerVisible: z.boolean(),
+    eventType: z.enum([
+      'SUBMITTED',
+      'STATUS_CHANGED',
+      'TRIAGE_UPDATED',
+      'INTERNAL_NOTE_ADDED',
+      'CUSTOMER_RESPONSE_ADDED',
+      'PUBLISHED',
+      'UNPUBLISHED',
+      'VOTED',
+      'VOTE_REMOVED',
+    ]),
+  })
+  .strict()
+const feedbackDetailBaseSchema = feedbackListItemSchema
+  .extend({
+    bug: z
+      .object({
+        environment: z.string().nullable(),
+        reproductionSteps: z.string().nullable(),
+      })
+      .strict()
+      .nullable(),
+    description: z.string(),
+    feature: z
+      .object({ desiredOutcome: z.string().nullable(), problemStatement: z.string() })
+      .strict()
+      .nullable(),
+    storage: z.object({ attachmentsAvailable: z.boolean() }).strict(),
+    updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+export const customerFeedbackDetailSchema = feedbackDetailBaseSchema
+  .extend({ events: z.array(feedbackEventSchema), messages: z.array(feedbackMessageSchema) })
+  .strict()
+export const staffFeedbackDetailSchema = feedbackDetailBaseSchema
+  .extend({
+    capabilities: feedbackCapabilitiesSchema,
+    events: z.array(staffFeedbackEventSchema),
+    messages: z.array(staffFeedbackMessageSchema),
+  })
+  .strict()
+export const feedbackProductsResponseSchema = supportProductsResponseSchema
+export const feedbackFilterMetadataResponseSchema = z
+  .object({
+    data: z
+      .object({
+        organizations: z.array(feedbackRelationSchema),
+        products: z.array(supportProductSchema),
+      })
+      .strict(),
+  })
+  .strict()
+export const feedbackIdentifierResponseSchema = supportIdentifierResponseSchema
+export const feedbackCursorSchema = z
+  .object({
+    id: z.uuid(),
+    sort: z.enum(['activity-desc', 'created-asc', 'created-desc']),
+    value: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+const feedbackListQueryBase = z.object({
+  cursor: z.string().max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  productId: z.uuid().optional(),
+  search: z.string().trim().min(1).max(120).optional(),
+  sort: z.enum(['activity-desc', 'created-asc', 'created-desc']).default('activity-desc'),
+  status: feedbackStatusSchema.optional(),
+  type: feedbackTypeSchema.optional(),
+})
+export const customerFeedbackListQuerySchema = feedbackListQueryBase
+  .extend({ scope: z.enum(['mine', 'public']).default('mine') })
+  .strict()
+export const staffFeedbackQueueQuerySchema = feedbackListQueryBase
+  .extend({ organizationId: z.uuid().optional(), priority: feedbackPrioritySchema.optional() })
+  .strict()
+export const feedbackParameterSchema = z.object({ feedbackId: z.uuid() }).strict()
+export const createFeedbackSchema = z
+  .object({
+    bugEnvironment: z.string().trim().max(2000).nullable().optional(),
+    bugReproductionSteps: z.string().trim().max(10000).nullable().optional(),
+    description: z.string().trim().min(1).max(30000),
+    featureDesiredOutcome: z.string().trim().max(10000).nullable().optional(),
+    featureProblemStatement: z.string().trim().max(10000).nullable().optional(),
+    productId: z.uuid(),
+    title: z.string().trim().min(3).max(240),
+    type: feedbackTypeSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.type === 'FEATURE_REQUEST' && !value.featureProblemStatement?.trim())
+      context.addIssue({
+        code: 'custom',
+        message: 'Describe the problem this feature should solve.',
+        path: ['featureProblemStatement'],
+      })
+  })
+export const addFeedbackMessageSchema = z
+  .object({ body: z.string().trim().min(1).max(30000) })
+  .strict()
+export const updateFeedbackStatusSchema = z.object({ status: feedbackStatusSchema }).strict()
+export const updateFeedbackTriageSchema = z
+  .object({
+    isPublic: z.boolean(),
+    priority: feedbackPrioritySchema.nullable(),
+    severity: feedbackSeveritySchema.nullable(),
+  })
+  .strict()
