@@ -688,7 +688,7 @@ export const staffSupportTicketDetailSchema = supportTicketDetailBaseSchema
 export const supportNotificationSchema = z
   .object({
     body: z.string(),
-    category: z.enum(['SUPPORT', 'FEEDBACK']),
+    category: z.enum(['SUPPORT', 'FEEDBACK', 'RELEASE']),
     createdAt: z.iso.datetime({ offset: true }),
     id: z.uuid(),
     linkPath: z.string().startsWith('/'),
@@ -930,4 +930,540 @@ export const updateFeedbackTriageSchema = z
     priority: feedbackPrioritySchema.nullable(),
     severity: feedbackSeveritySchema.nullable(),
   })
+  .strict()
+
+export const releaseStatusSchema = z.enum(['DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED'])
+export const maintenanceStatusSchema = z.enum([
+  'DRAFT',
+  'SCHEDULED',
+  'ACTIVE',
+  'COMPLETED',
+  'CANCELLED',
+])
+export const releaseAudienceSchema = z.enum(['ALL_SUBSCRIBERS', 'SELECTED_ORGANIZATIONS'])
+export const releaseSectionCategorySchema = z.enum([
+  'NEW_FEATURE',
+  'IMPROVEMENT',
+  'BUG_FIX',
+  'SECURITY',
+  'DEPRECATION',
+  'IMPORTANT_CHANGE',
+])
+export const releaseRelationSchema = z.object({ id: z.uuid(), name: z.string() }).strict()
+export const releaseProductSchema = releaseRelationSchema.extend({ code: z.string() }).strict()
+export const customerReleaseListItemSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    customerVisible: z.boolean(),
+    id: z.uuid(),
+    lastActivityAt: z.iso.datetime({ offset: true }),
+    product: releaseProductSchema,
+    publishedAt: z.iso.datetime({ offset: true }).nullable(),
+    releaseDate: z.iso.datetime({ offset: true }).nullable(),
+    scheduledFor: z.iso.datetime({ offset: true }).nullable(),
+    status: releaseStatusSchema,
+    summary: z.string().nullable(),
+    title: z.string(),
+    version: z.string(),
+  })
+  .strict()
+export const releaseListItemSchema = customerReleaseListItemSchema
+  .extend({
+    audience: releaseAudienceSchema,
+    targetCount: z.coerce.number().int().nonnegative(),
+  })
+  .strict()
+export const releaseEventSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    customerVisible: z.boolean(),
+    eventType: z.string(),
+    id: z.uuid(),
+  })
+  .strict()
+export const releaseSectionSchema = z
+  .object({
+    body: z.string(),
+    category: releaseSectionCategorySchema,
+    id: z.uuid(),
+    sortOrder: z.number().int().nonnegative(),
+    title: z.string(),
+  })
+  .strict()
+export const releaseCapabilitiesSchema = z
+  .object({
+    canArchive: z.boolean(),
+    canEdit: z.boolean(),
+    canManageAudience: z.boolean(),
+    canManageMaintenance: z.boolean(),
+    canPublish: z.boolean(),
+    canSchedule: z.boolean(),
+  })
+  .strict()
+export const customerReleaseDetailSchema = customerReleaseListItemSchema
+  .extend({
+    events: z.array(releaseEventSchema.omit({ customerVisible: true })),
+    releaseNotes: z.string().nullable(),
+    sections: z.array(releaseSectionSchema),
+    storage: z.object({ attachmentsAvailable: z.boolean() }).strict(),
+  })
+  .strict()
+export const staffReleaseDetailSchema = releaseListItemSchema
+  .extend({
+    capabilities: releaseCapabilitiesSchema,
+    events: z.array(releaseEventSchema),
+    feedbackLinks: z.array(z.object({ feedbackId: z.uuid(), title: z.string() }).strict()),
+    releaseNotes: z.string().nullable(),
+    sections: z.array(releaseSectionSchema),
+    storage: z.object({ attachmentsAvailable: z.boolean() }).strict(),
+    targets: z.array(releaseRelationSchema),
+  })
+  .strict()
+export const releaseListResponseSchema = z
+  .object({ data: z.array(releaseListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerReleaseListResponseSchema = z
+  .object({ data: z.array(customerReleaseListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerMaintenanceListItemSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    customerVisible: z.boolean(),
+    description: z.string(),
+    endsAt: z.iso.datetime({ offset: true }).nullable(),
+    id: z.uuid(),
+    lastActivityAt: z.iso.datetime({ offset: true }),
+    product: releaseProductSchema,
+    startsAt: z.iso.datetime({ offset: true }),
+    status: maintenanceStatusSchema,
+    title: z.string(),
+  })
+  .strict()
+export const maintenanceListItemSchema = customerMaintenanceListItemSchema
+  .extend({
+    audience: releaseAudienceSchema,
+    targetCount: z.coerce.number().int().nonnegative(),
+    targets: z.array(releaseRelationSchema),
+  })
+  .strict()
+export const maintenanceListResponseSchema = z
+  .object({ data: z.array(maintenanceListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerMaintenanceListResponseSchema = z
+  .object({ data: z.array(customerMaintenanceListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerReleaseOverviewSchema = z
+  .object({
+    currentVersions: z.array(
+      z.object({ currentVersion: z.string().nullable(), product: releaseProductSchema }).strict(),
+    ),
+    maintenance: z.array(customerMaintenanceListItemSchema),
+    releases: z.array(customerReleaseListItemSchema),
+  })
+  .strict()
+export const releaseCurrentVersionsResponseSchema = customerReleaseOverviewSchema.pick({
+  currentVersions: true,
+})
+export const releaseFilterMetadataResponseSchema = z
+  .object({
+    data: z
+      .object({
+        featureRequests: z.array(
+          z.object({ id: z.uuid(), productId: z.uuid(), title: z.string() }).strict(),
+        ),
+        organizations: z.array(releaseRelationSchema),
+        products: z.array(releaseProductSchema),
+      })
+      .strict(),
+  })
+  .strict()
+const releaseListQueryBase = z.object({
+  cursor: z.string().max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  productId: z.uuid().optional(),
+  search: z.string().trim().min(1).max(120).optional(),
+  sort: z.enum(['activity-desc', 'date-asc', 'date-desc']).default('activity-desc'),
+})
+export const customerReleaseListQuerySchema = releaseListQueryBase.strict()
+export const staffReleaseListQuerySchema = releaseListQueryBase
+  .extend({ status: releaseStatusSchema.optional() })
+  .strict()
+export const maintenanceListQuerySchema = z
+  .object({
+    cursor: z.string().max(2048).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    productId: z.uuid().optional(),
+    status: maintenanceStatusSchema.optional(),
+  })
+  .strict()
+export const releaseParameterSchema = z.object({ releaseId: z.uuid() }).strict()
+export const maintenanceParameterSchema = z.object({ noticeId: z.uuid() }).strict()
+export const releaseIdentifierResponseSchema = z
+  .object({ data: z.object({ id: z.uuid() }).strict() })
+  .strict()
+export const createReleaseSchema = z
+  .object({
+    productId: z.uuid(),
+    releaseNotes: z.string().trim().max(50000).nullable().optional(),
+    summary: z.string().trim().max(2000).nullable().optional(),
+    title: z.string().trim().min(3).max(240),
+    version: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/),
+  })
+  .strict()
+export const updateReleaseContentSchema = createReleaseSchema
+  .omit({ productId: true, version: true })
+  .strict()
+export const updateReleaseAudienceSchema = z
+  .object({
+    mode: releaseAudienceSchema,
+    organizationIds: z.array(z.uuid()).max(500).default([]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.mode === 'SELECTED_ORGANIZATIONS' && value.organizationIds.length === 0)
+      context.addIssue({ code: 'custom', message: 'Select at least one organization.' })
+  })
+export const upsertReleaseSectionSchema = z
+  .object({
+    body: z.string().trim().min(1).max(10000),
+    category: releaseSectionCategorySchema,
+    sectionId: z.uuid().nullable().optional(),
+    sortOrder: z.number().int().min(0).max(10000).default(0),
+    title: z.string().trim().min(2).max(160),
+  })
+  .strict()
+export const transitionReleaseSchema = z
+  .object({
+    scheduledFor: z.iso.datetime({ offset: true }).nullable().optional(),
+    status: releaseStatusSchema,
+  })
+  .strict()
+export const linkReleaseFeedbackSchema = z.object({ feedbackId: z.uuid() }).strict()
+const maintenanceMutationBaseSchema = z
+  .object({
+    description: z.string().trim().min(1).max(30000),
+    endsAt: z.iso.datetime({ offset: true }).nullable().optional(),
+    startsAt: z.iso.datetime({ offset: true }),
+    title: z.string().trim().min(3).max(240),
+  })
+  .strict()
+export const createMaintenanceSchema = maintenanceMutationBaseSchema
+  .extend({ productId: z.uuid() })
+  .strict()
+  .refine((value) => !value.endsAt || value.endsAt > value.startsAt, {
+    message: 'Expected end must follow the start time.',
+    path: ['endsAt'],
+  })
+export const updateMaintenanceSchema = maintenanceMutationBaseSchema.refine(
+  (value) => !value.endsAt || value.endsAt > value.startsAt,
+  { message: 'Expected end must follow the start time.', path: ['endsAt'] },
+)
+export const transitionMaintenanceSchema = z.object({ status: maintenanceStatusSchema }).strict()
+
+// Milestone 7 — Knowledge Base
+export const knowledgeArticleStatusSchema = z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'])
+export const knowledgeAudienceSchema = z.enum([
+  'INTERNAL',
+  'ALL_CUSTOMERS',
+  'PRODUCT_SCOPED',
+  'SELECTED_ORGANIZATION',
+])
+export const knowledgeArticleTypeSchema = z.enum([
+  'GUIDE',
+  'FAQ',
+  'REFERENCE',
+  'TROUBLESHOOTING',
+  'ANNOUNCEMENT',
+])
+export const knowledgeRelationSchema = z.object({ id: z.uuid(), name: z.string() }).strict()
+export const knowledgeProductSchema = knowledgeRelationSchema.extend({ code: z.string() }).strict()
+export const knowledgeCategorySchema = z
+  .object({
+    code: z.string(),
+    description: z.string().nullable(),
+    id: z.uuid(),
+    isActive: z.boolean(),
+    name: z.string(),
+    product: knowledgeProductSchema.nullable(),
+    sortOrder: z.number().int(),
+  })
+  .strict()
+const customerKnowledgeArticleBaseSchema = z
+  .object({
+    articleType: knowledgeArticleTypeSchema,
+    category: knowledgeRelationSchema.nullable(),
+    externalUrl: z.url().nullable(),
+    id: z.uuid(),
+    product: knowledgeProductSchema.nullable(),
+    publishedAt: z.iso.datetime({ offset: true }),
+    slug: z.string(),
+    summary: z.string().nullable(),
+    title: z.string(),
+    updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+export const customerKnowledgeArticleSchema = customerKnowledgeArticleBaseSchema
+  .extend({ body: z.string() })
+  .strict()
+export const staffKnowledgeArticleSchema = customerKnowledgeArticleBaseSchema
+  .omit({ publishedAt: true })
+  .extend({
+    articleStatus: knowledgeArticleStatusSchema,
+    audience: knowledgeAudienceSchema,
+    organization: knowledgeRelationSchema.nullable(),
+    publishedAt: z.iso.datetime({ offset: true }).nullable(),
+  })
+  .strict()
+export const staffKnowledgeArticleDetailSchema = staffKnowledgeArticleSchema
+  .extend({
+    body: z.string(),
+    createdAt: z.iso.datetime({ offset: true }),
+    events: z.array(
+      z
+        .object({
+          createdAt: z.iso.datetime({ offset: true }),
+          eventType: z.string(),
+          id: z.uuid(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+const knowledgeListBaseSchema = z.object({
+  categoryId: z.uuid().optional(),
+  cursor: z.string().max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  productId: z.uuid().optional(),
+  search: z.string().trim().min(1).max(120).optional(),
+  sort: z.enum(['updated-desc', 'published-desc', 'title-asc']).default('updated-desc'),
+  type: knowledgeArticleTypeSchema.optional(),
+})
+export const customerKnowledgeListQuerySchema = knowledgeListBaseSchema.strict()
+export const staffKnowledgeListQuerySchema = knowledgeListBaseSchema
+  .extend({ status: knowledgeArticleStatusSchema.optional() })
+  .strict()
+export const customerKnowledgeListResponseSchema = z
+  .object({ data: z.array(customerKnowledgeArticleBaseSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const staffKnowledgeListResponseSchema = z
+  .object({ data: z.array(staffKnowledgeArticleSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerKnowledgeDetailResponseSchema = z
+  .object({ data: customerKnowledgeArticleSchema, attachmentsAvailable: z.boolean() })
+  .strict()
+export const staffKnowledgeDetailResponseSchema = z
+  .object({ data: staffKnowledgeArticleDetailSchema, attachmentsAvailable: z.boolean() })
+  .strict()
+export const knowledgeMetadataResponseSchema = z
+  .object({
+    attachmentsAvailable: z.boolean(),
+    categories: z.array(knowledgeCategorySchema),
+    organizations: z.array(knowledgeRelationSchema),
+    products: z.array(knowledgeProductSchema),
+  })
+  .strict()
+export const knowledgeIdentifierResponseSchema = z
+  .object({ data: z.object({ id: z.uuid() }).strict() })
+  .strict()
+export const createKnowledgeArticleSchema = z
+  .object({
+    articleType: knowledgeArticleTypeSchema,
+    audience: knowledgeAudienceSchema,
+    body: z.string().trim().min(1).max(100000),
+    categoryId: z.uuid().nullable().optional(),
+    externalUrl: z
+      .url()
+      .regex(/^https?:\/\//)
+      .nullable()
+      .optional(),
+    organizationId: z.uuid().nullable().optional(),
+    productId: z.uuid().nullable().optional(),
+    summary: z.string().trim().max(2000).nullable().optional(),
+    title: z.string().trim().min(3).max(240),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.audience === 'PRODUCT_SCOPED' && !value.productId)
+      context.addIssue({ code: 'custom', message: 'Product-scoped articles require a product.' })
+    if (value.audience === 'SELECTED_ORGANIZATION' && !value.organizationId)
+      context.addIssue({ code: 'custom', message: 'Select an organization.' })
+    if (value.audience !== 'SELECTED_ORGANIZATION' && value.organizationId)
+      context.addIssue({ code: 'custom', message: 'Organization targeting is not valid here.' })
+  })
+export const updateKnowledgeContentSchema = z
+  .object({
+    body: z.string().trim().min(1).max(100000),
+    externalUrl: z
+      .url()
+      .regex(/^https?:\/\//)
+      .nullable()
+      .optional(),
+    summary: z.string().trim().max(2000).nullable().optional(),
+    title: z.string().trim().min(3).max(240),
+  })
+  .strict()
+export const updateKnowledgeScopeSchema = z
+  .object({
+    articleType: knowledgeArticleTypeSchema,
+    audience: knowledgeAudienceSchema,
+    categoryId: z.uuid().nullable().optional(),
+    organizationId: z.uuid().nullable().optional(),
+    productId: z.uuid().nullable().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.audience === 'PRODUCT_SCOPED' && !value.productId)
+      context.addIssue({ code: 'custom', message: 'Product-scoped articles require a product.' })
+    if (value.audience === 'SELECTED_ORGANIZATION' && !value.organizationId)
+      context.addIssue({ code: 'custom', message: 'Select an organization.' })
+  })
+export const transitionKnowledgeArticleSchema = z
+  .object({ status: knowledgeArticleStatusSchema })
+  .strict()
+export const createKnowledgeCategorySchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .regex(/^[A-Z][A-Z0-9_]{1,63}$/),
+    description: z.string().trim().max(1000).nullable().optional(),
+    name: z.string().trim().min(2).max(120),
+    productId: z.uuid().nullable().optional(),
+    sortOrder: z.number().int().min(0).max(100000).default(0),
+  })
+  .strict()
+export const knowledgeArticleParameterSchema = z.object({ articleId: z.uuid() }).strict()
+export const knowledgeCategoryParameterSchema = z.object({ categoryId: z.uuid() }).strict()
+export const setKnowledgeCategoryActiveSchema = z.object({ active: z.boolean() }).strict()
+
+// Milestone 8 — Analytics & Customer Success
+export const analyticsWindowSchema = z.enum(['7D', '30D', '90D', 'ALL'])
+const nonNegativeCountSchema = z.coerce.number().int().nonnegative()
+const countMapSchema = z.record(z.string(), nonNegativeCountSchema)
+export const analyticsOverviewQuerySchema = z
+  .object({
+    organizationId: z.uuid().optional(),
+    productId: z.uuid().optional(),
+    window: analyticsWindowSchema.default('30D'),
+  })
+  .strict()
+export const analyticsOverviewSchema = z
+  .object({
+    customers: z.object({ active: nonNegativeCountSchema, lifecycle: countMapSchema }).strict(),
+    delivery: z
+      .object({
+        articleTypes: countMapSchema,
+        maintenance: nonNegativeCountSchema,
+        publishedArticles: nonNegativeCountSchema,
+        publishedReleases: nonNegativeCountSchema,
+        scheduledReleases: nonNegativeCountSchema,
+      })
+      .strict(),
+    feedback: z
+      .object({
+        publishedFeatures: nonNegativeCountSchema,
+        statuses: countMapSchema,
+        total: nonNegativeCountSchema,
+        types: countMapSchema,
+        votes: nonNegativeCountSchema,
+      })
+      .strict(),
+    generatedAt: z.iso.datetime({ offset: true }),
+    implementation: z
+      .object({
+        active: nonNegativeCountSchema,
+        completed: nonNegativeCountSchema,
+        overdueMilestones: nonNegativeCountSchema,
+      })
+      .strict(),
+    onboarding: z
+      .object({
+        active: nonNegativeCountSchema,
+        completed: nonNegativeCountSchema,
+        eligible: nonNegativeCountSchema,
+        overduePlans: nonNegativeCountSchema,
+        overdueTasks: nonNegativeCountSchema,
+      })
+      .strict(),
+    support: z
+      .object({
+        active: nonNegativeCountSchema,
+        averageFirstResponseMinutes: z.coerce.number().nonnegative().nullable(),
+        averageResolutionMinutes: z.coerce.number().nonnegative().nullable(),
+        breached: nonNegativeCountSchema,
+        firstResponseEligible: nonNegativeCountSchema,
+        firstResponseMet: nonNegativeCountSchema,
+        priorities: countMapSchema,
+        resolutionEligible: nonNegativeCountSchema,
+        resolutionMet: nonNegativeCountSchema,
+        statuses: countMapSchema,
+      })
+      .strict(),
+    window: analyticsWindowSchema,
+  })
+  .strict()
+export const analyticsOverviewResponseSchema = z.object({ data: analyticsOverviewSchema }).strict()
+export const customerSuccessPortfolioQuerySchema = z
+  .object({
+    afterId: z.uuid().optional(),
+    afterName: z.string().trim().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    productId: z.uuid().optional(),
+    search: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict()
+  .refine((value) => Boolean(value.afterId) === Boolean(value.afterName), {
+    message: 'Both portfolio cursor fields are required.',
+  })
+export const customerSuccessPortfolioItemSchema = z
+  .object({
+    activeTickets: nonNegativeCountSchema,
+    csmName: z.string().nullable(),
+    healthCalculatedAt: z.iso.datetime({ offset: true }).nullable(),
+    healthScore: z.coerce.number().min(0).max(100).nullable(),
+    id: z.uuid(),
+    implementationActive: nonNegativeCountSchema,
+    lifecycleStatus: z.string(),
+    name: z.string(),
+    onboardingActive: nonNegativeCountSchema,
+    onboardingOverdue: z.boolean(),
+    openFeedback: nonNegativeCountSchema,
+    slaBreaches: nonNegativeCountSchema,
+    urgentTickets: nonNegativeCountSchema,
+  })
+  .strict()
+export const customerSuccessPortfolioResponseSchema = z
+  .object({
+    data: z.array(customerSuccessPortfolioItemSchema),
+    next: z.object({ id: z.uuid(), name: z.string() }).strict().nullable(),
+  })
+  .strict()
+export const customerAnalyticsSummarySchema = z
+  .object({
+    activeTickets: nonNegativeCountSchema,
+    generatedAt: z.iso.datetime({ offset: true }),
+    healthHistory: z.array(
+      z
+        .object({
+          calculatedAt: z.iso.datetime({ offset: true }),
+          reason: z.string().nullable(),
+          score: z.coerce.number().min(0).max(100),
+        })
+        .strict(),
+    ),
+    implementationActive: nonNegativeCountSchema,
+    maintenanceNotices: nonNegativeCountSchema,
+    onboardingActive: nonNegativeCountSchema,
+    openFeedback: nonNegativeCountSchema,
+    pendingActions: nonNegativeCountSchema,
+    publishedArticles: nonNegativeCountSchema,
+    recentReleases: nonNegativeCountSchema,
+    window: analyticsWindowSchema,
+  })
+  .strict()
+export const customerAnalyticsSummaryResponseSchema = z
+  .object({ data: customerAnalyticsSummarySchema })
   .strict()

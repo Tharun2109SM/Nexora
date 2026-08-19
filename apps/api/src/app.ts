@@ -11,18 +11,24 @@ import { environment } from './lib/env.js'
 import { AppError, errorHandler, notFoundHandler } from './lib/errors.js'
 import { SupabaseAccessTokenVerifier } from './lib/supabase-verifier.js'
 import { authenticate } from './middleware/auth.js'
+import { analyticsRouter } from './routes/analytics.js'
 import { healthRouter } from './routes/health.js'
+import { knowledgeRouter } from './routes/knowledge.js'
 import { customersRouter } from './routes/customers.js'
 import { feedbackRouter } from './routes/feedback.js'
 import { logosRouter } from './routes/logos.js'
 import { meRouter } from './routes/me.js'
 import { organizationsRouter } from './routes/organizations.js'
+import { releasesRouter } from './routes/releases.js'
 import { supportRouter } from './routes/support.js'
 import { workflowsRouter } from './routes/workflows.js'
 import type { AccessTokenVerifier } from './types.js'
 
 interface CreateAppOptions {
+  analyticsRouter?: Router
   feedbackRouter?: Router
+  knowledgeRouter?: Router
+  releasesRouter?: Router
   supportRouter?: Router
 }
 
@@ -94,7 +100,10 @@ export function createApp(
     logosRouter,
     workflowsRouter,
     options.supportRouter ?? supportRouter,
+    options.knowledgeRouter ?? knowledgeRouter,
+    options.analyticsRouter ?? analyticsRouter,
     options.feedbackRouter ?? feedbackRouter,
+    options.releasesRouter ?? releasesRouter,
   )
   app.use(notFoundHandler)
   app.use(errorHandler)

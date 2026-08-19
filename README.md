@@ -2,7 +2,7 @@
 
 NEXORA is Beau Roi Technologies Private Limited's B2B product-operations and customer-success platform. It gives Beau Roi employees and customer-company teams a shared, organization-isolated workspace for onboarding, implementation, support, feedback, releases, analytics, and documentation.
 
-This repository contains the secure platform foundation, Milestone 2 customer administration, and Milestone 3 onboarding and implementation workflows. Other product-operations modules remain intentionally staged.
+This repository contains all eight core local milestones: the secure platform foundation, customer administration, onboarding and implementation, support, feedback, releases, knowledge management, and operational analytics/customer success.
 
 ## Milestone status
 
@@ -21,12 +21,16 @@ Implemented:
 - Customer organization profile/member administration and secure single-use invitation links
 - Feature-gated private Cloudflare R2 company-logo upload/proxy support
 - Governed onboarding and implementation portfolios, detailed workspaces, customer read-only views, calculated progress, lifecycle guards, and internal-note isolation
+- Secure support, feedback, release, and maintenance workflows with caller-scoped authorization and customer-safe projections
+- Searchable Knowledge Base with review/publication lifecycle, configurable classification, product/organization audiences, immutable history, and an honest R2-unavailable state
+- Real operational analytics with deterministic time windows, accessible distributions, SLA observations, health history, and a paginated customer-success portfolio
 
 Deferred intentionally:
 
-- Complete ticketing, feedback, release, analytics, and knowledge-base workflows
-- Chart.js screens (analytics is currently an empty-state destination)
 - SMTP invitation delivery (secure copyable links are available until a provider is approved)
+- Private R2 file/knowledge attachment controls until company credentials are configured
+- An automated or company-approved composite customer-health formula; current health scores remain explicit historical inputs
+- Read/adoption telemetry for knowledge articles; no readership metrics are inferred
 - Final company-approved Terms and Privacy text
 
 ## Architecture
@@ -200,6 +204,8 @@ It creates core organizations, profiles, role definitions, memberships, and the 
 Milestone 2 permissions, endpoints, invitation lifecycle, audit behavior, R2 setup, and safe deployment order are documented in [docs/milestone-2.md](docs/milestone-2.md).
 
 Milestone 3 onboarding/implementation workflows, authorization, endpoints, progress rules, internal-note isolation, and deployment order are documented in [docs/milestone-3.md](docs/milestone-3.md).
+
+Milestone 7 Knowledge Base is documented in [docs/milestone-7.md](docs/milestone-7.md), and Milestone 8 Analytics & Customer Success is documented in [docs/milestone-8.md](docs/milestone-8.md).
 
 Important policy behavior:
 
