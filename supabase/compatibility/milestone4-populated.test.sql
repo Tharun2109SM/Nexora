@@ -33,7 +33,7 @@ begin
   if (select array_agg(version order by version) from supabase_migrations.schema_migrations)
       <> array[
         '20260814183342','20260815090632','20260815143152','20260815145547',
-        '20260818095628','20260818171437'
+        '20260818095628','20260818171437','20260819053724'
       ]::text[] then
     raise exception 'Compatibility failure: migration history changed unexpectedly';
   end if;

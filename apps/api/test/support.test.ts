@@ -1,4 +1,8 @@
 import type { AccessTokenVerifier } from '../src/types.js'
+import {
+  staffSupportTicketDetailSchema,
+  supportNotificationsResponseSchema,
+} from '@nexora/contracts'
 import request from 'supertest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -30,6 +34,12 @@ class FakeQuery {
   in() {
     return this
   }
+  is() {
+    return this
+  }
+  ilike() {
+    return this
+  }
   limit() {
     return this
   }
@@ -43,6 +53,9 @@ class FakeQuery {
     return this
   }
   select() {
+    return this
+  }
+  update() {
     return this
   }
   single() {
@@ -174,6 +187,50 @@ describe('support API authorization and writes', () => {
       .expect(200)
     expect(response.body).toMatchObject({ data: [{ id: ticketId, reference: 'SUP-42' }] })
     expect(setup.client.from).toHaveBeenCalledWith('support_tickets')
+  })
+
+  it('supports bounded customer subject search within identity scope', async () => {
+    const setup = appWithResults('CUSTOMER_ADMIN', {
+      profiles: { data: [], error: null },
+      support_tickets: { data: [ticket], error: null },
+    })
+    const response = await request(setup.app)
+      .get('/v1/support/tickets?search=Support')
+      .set('authorization', 'Bearer customer')
+      .expect(200)
+    expect(response.body).toMatchObject({ data: [{ id: ticketId }] })
+  })
+
+  it('lists only active caller-scoped support products through a safe projection', async () => {
+    const setup = appWithResults('CUSTOMER_ADMIN', {
+      customer_subscriptions: {
+        data: [
+          {
+            product: { code: 'NEXORA', id: productId, name: 'NEXORA' },
+            product_id: productId,
+          },
+        ],
+        error: null,
+      },
+    })
+    const response = await request(setup.app)
+      .get('/v1/support/products')
+      .set('authorization', 'Bearer customer')
+      .expect(200)
+    expect(response.body).toEqual({
+      data: [{ code: 'NEXORA', id: productId, name: 'NEXORA' }],
+    })
+    expect(response.text).not.toContain('organization')
+    expect(response.text).not.toContain('subscription')
+  })
+
+  it('does not expose the customer support-product route to staff identities', async () => {
+    const response = await request(app('BEAUROI_EMPLOYEE'))
+      .get('/v1/support/products')
+      .set('authorization', 'Bearer staff')
+      .expect(403)
+    expect(errorSchema.parse(response.body as unknown).error.code).toBe('CUSTOMER_ACCESS_REQUIRED')
+    expect(fakeClient.from).not.toHaveBeenCalled()
   })
 
   it('returns a paginated staff queue with a deterministic cursor', async () => {
@@ -327,6 +384,131 @@ describe('support API authorization and writes', () => {
       .expect(200)
     expect(response.text).toContain('Staff-only diagnosis')
     expect(response.body).toMatchObject({ data: { messages: [{ isInternal: true }] } })
+    expect(response.body).toMatchObject({ data: { capabilities: { canReply: false } } })
+  })
+
+  it('derives support-lead and administrator capabilities from authoritative scope', async () => {
+    const detailResults = {
+      attachments: { data: [], error: null },
+      customer_assignments: { data: [{ employee_user_id: userId }], error: null },
+      profiles: {
+        data: [{ designation: 'Support', full_name: 'Support Agent', id: userId }],
+        error: null,
+      },
+      support_ticket_events: { data: [], error: null },
+      support_tickets: { data: ticket, error: null },
+      ticket_messages: { data: [], error: null },
+    }
+    const employee = await request(appWithResults('BEAUROI_EMPLOYEE', detailResults).app)
+      .get(`/v1/support/tickets/${ticketId}`)
+      .set('authorization', 'Bearer support-lead')
+      .expect(200)
+    const administrator = await request(appWithResults('BEAUROI_ADMIN', detailResults).app)
+      .get(`/v1/support/tickets/${ticketId}`)
+      .set('authorization', 'Bearer administrator')
+      .expect(200)
+    const employeeDetail = z
+      .object({ data: staffSupportTicketDetailSchema })
+      .parse(employee.body as unknown).data
+    const administratorDetail = z
+      .object({ data: staffSupportTicketDetailSchema })
+      .parse(administrator.body as unknown).data
+    expect(Object.values(employeeDetail.capabilities).every(Boolean)).toBe(true)
+    expect(Object.values(administratorDetail.capabilities).every(Boolean)).toBe(true)
+  })
+
+  it('returns only eligible scoped assignees and blocks customers', async () => {
+    const setup = appWithResults('BEAUROI_ADMIN', {
+      customer_assignments: { data: [{ employee_user_id: userId }], error: null },
+      organization_memberships: {
+        data: [
+          {
+            organizations: { is_active: true, organization_type: 'BEAUROI' },
+            role: 'BEAUROI_EMPLOYEE',
+            user_id: userId,
+          },
+        ],
+        error: null,
+      },
+      profiles: {
+        data: [{ designation: 'Support lead', full_name: 'Eligible Agent', id: userId }],
+        error: null,
+      },
+      support_tickets: { data: ticket, error: null },
+    })
+    const response = await request(setup.app)
+      .get(`/v1/support/tickets/${ticketId}/eligible-assignees`)
+      .set('authorization', 'Bearer administrator')
+      .expect(200)
+    expect(response.body).toEqual({
+      data: [{ designation: 'Support lead', fullName: 'Eligible Agent', id: userId }],
+    })
+    expect(response.text).not.toContain('email')
+    await request(app('CUSTOMER_ADMIN'))
+      .get(`/v1/support/tickets/${ticketId}/eligible-assignees`)
+      .set('authorization', 'Bearer customer')
+      .expect(403)
+  })
+
+  it('returns complete safe staff filter metadata independent of the current queue page', async () => {
+    const setup = appWithResults('BEAUROI_ADMIN', {
+      customer_assignments: { data: [], error: null },
+      organization_memberships: { data: [], error: null },
+      organizations: { data: [{ id: organizationId, name: 'Customer' }], error: null },
+      products: { data: [{ code: 'NEXORA', id: productId, name: 'NEXORA' }], error: null },
+      support_categories: { data: [ticket.category], error: null },
+    })
+    const response = await request(setup.app)
+      .get('/v1/support/filter-metadata')
+      .set('authorization', 'Bearer administrator')
+      .expect(200)
+    expect(response.body).toMatchObject({
+      data: {
+        assignees: [],
+        categories: [{ id: categoryId, name: 'General' }],
+        organizations: [{ id: organizationId, name: 'Customer' }],
+        products: [{ code: 'NEXORA', id: productId, name: 'NEXORA' }],
+      },
+    })
+    expect(response.text).not.toContain('website')
+    expect(response.text).not.toContain('email')
+  })
+
+  it('returns caller-owned notifications with role-safe deep links only', async () => {
+    const setup = appWithResults('CUSTOMER_ADMIN', {
+      notifications: {
+        data: [
+          {
+            body: 'A Beau Roi support reply is available.',
+            category: 'SUPPORT',
+            created_at: timestamp,
+            id: messageId,
+            link_path: `/portal/support/${ticketId}`,
+            status: 'UNREAD',
+            title: 'SUP-42 · Support request',
+          },
+          {
+            body: 'Wrong portal',
+            category: 'SUPPORT',
+            created_at: timestamp,
+            id: categoryId,
+            link_path: `/beauroi/support/${ticketId}`,
+            status: 'UNREAD',
+            title: 'Wrong portal',
+          },
+        ],
+        error: null,
+      },
+    })
+    const response = await request(setup.app)
+      .get('/v1/support/notifications')
+      .set('authorization', 'Bearer customer')
+      .expect(200)
+    const notifications = supportNotificationsResponseSchema.parse(response.body as unknown).data
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]).toMatchObject({ linkPath: `/portal/support/${ticketId}` })
+    expect(response.text).not.toContain('objectKey')
+    expect(response.text).not.toContain('internal')
   })
 
   it('rejects a customer-supplied organization before database access', async () => {

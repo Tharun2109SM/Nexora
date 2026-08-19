@@ -549,6 +549,16 @@ export const supportTicketEventTypeSchema = z.enum([
 export const supportPersonSchema = z
   .object({ designation: z.string().nullable(), fullName: z.string(), id: z.uuid() })
   .strict()
+export const supportCapabilitiesSchema = z
+  .object({
+    canAddInternalNote: z.boolean(),
+    canAssign: z.boolean(),
+    canChangeCategory: z.boolean(),
+    canChangePriority: z.boolean(),
+    canChangeStatus: z.boolean(),
+    canReply: z.boolean(),
+  })
+  .strict()
 export const supportCategorySchema = z
   .object({
     code: z.string(),
@@ -557,6 +567,27 @@ export const supportCategorySchema = z
     isActive: z.boolean(),
     name: z.string(),
     productId: z.uuid().nullable(),
+  })
+  .strict()
+export const supportProductSchema = z
+  .object({ code: z.string(), id: z.uuid(), name: z.string() })
+  .strict()
+export const supportProductsResponseSchema = z
+  .object({ data: z.array(supportProductSchema) })
+  .strict()
+export const supportEligibleAssigneesResponseSchema = z
+  .object({ data: z.array(supportPersonSchema) })
+  .strict()
+export const supportFilterMetadataResponseSchema = z
+  .object({
+    data: z
+      .object({
+        assignees: z.array(supportPersonSchema),
+        categories: z.array(supportCategorySchema),
+        organizations: z.array(z.object({ id: z.uuid(), name: z.string() }).strict()),
+        products: z.array(supportProductSchema),
+      })
+      .strict(),
   })
   .strict()
 export const supportAttachmentSchema = z
@@ -605,6 +636,9 @@ export const supportTicketListItemSchema = z
 export const supportTicketListResponseSchema = z
   .object({ data: z.array(supportTicketListItemSchema), nextCursor: z.string().nullable() })
   .strict()
+export const supportIdentifierResponseSchema = z
+  .object({ data: z.object({ id: z.uuid() }).strict() })
+  .strict()
 
 export const supportMessageSchema = z
   .object({
@@ -645,9 +679,25 @@ export const customerSupportTicketDetailSchema = supportTicketDetailBaseSchema
   .strict()
 export const staffSupportTicketDetailSchema = supportTicketDetailBaseSchema
   .extend({
+    capabilities: supportCapabilitiesSchema,
     events: z.array(staffSupportEventSchema),
     messages: z.array(staffSupportMessageSchema),
   })
+  .strict()
+
+export const supportNotificationSchema = z
+  .object({
+    body: z.string(),
+    category: z.literal('SUPPORT'),
+    createdAt: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+    linkPath: z.string().startsWith('/'),
+    status: z.enum(['UNREAD', 'READ', 'ARCHIVED']),
+    title: z.string(),
+  })
+  .strict()
+export const supportNotificationsResponseSchema = z
+  .object({ data: z.array(supportNotificationSchema) })
   .strict()
 
 export const supportTicketCursorSchema = z
@@ -662,6 +712,7 @@ const supportListQueryBase = z.object({
   cursor: z.string().max(2048).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   productId: z.uuid().optional(),
+  search: z.string().trim().min(1).max(120).optional(),
   sort: z.enum(['activity-desc', 'created-asc', 'created-desc']).default('activity-desc'),
   status: supportTicketStatusSchema.optional(),
 })
@@ -671,11 +722,11 @@ export const staffSupportQueueQuerySchema = supportListQueryBase
     assigneeId: z.uuid().optional(),
     organizationId: z.uuid().optional(),
     priority: supportTicketPrioritySchema.optional(),
-    search: z.string().trim().min(1).max(120).optional(),
   })
   .strict()
 export const supportCategoriesQuerySchema = z.object({ productId: z.uuid().optional() }).strict()
 export const supportTicketParameterSchema = z.object({ ticketId: z.uuid() }).strict()
+export const supportNotificationParameterSchema = z.object({ notificationId: z.uuid() }).strict()
 export const createSupportTicketSchema = z
   .object({
     categoryId: z.uuid(),

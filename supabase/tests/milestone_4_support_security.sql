@@ -1,6 +1,6 @@
 begin;
 
-select plan(80);
+select plan(93);
 
 insert into auth.users (id, aud, role, email, encrypted_password, raw_app_meta_data, raw_user_meta_data)
 values
@@ -125,6 +125,7 @@ select ok(not has_table_privilege('authenticated', 'public.attachments', 'INSERT
 select ok(not has_table_privilege('authenticated', 'public.notifications', 'INSERT'), 'authenticated cannot forge notifications');
 select ok(not has_column_privilege('authenticated', 'public.notifications', 'title', 'UPDATE'), 'notification title is immutable to authenticated users');
 select ok(not has_function_privilege('authenticated', 'private.support_actor_has_assignment(uuid,uuid)', 'EXECUTE'), 'private support authorization helper is not exposed');
+select ok(not has_function_privilege('authenticated', 'private.create_support_event_notifications()', 'EXECUTE'), 'private support notification trigger is not exposed');
 select ok(has_function_privilege('authenticated', 'public.create_support_ticket(uuid,uuid,uuid,text,text)', 'EXECUTE'), 'customer ticket creation RPC has explicit execute permission');
 select ok(has_function_privilege('authenticated', 'public.add_support_ticket_message(uuid,text,boolean)', 'EXECUTE'), 'ticket message RPC has explicit execute permission');
 
@@ -185,6 +186,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-00000000000a","role":"authenticated"}';
 select is((select count(*)::integer from public.support_tickets), 1, 'customer B sees only its own ticket');
 select is((select count(id)::integer from public.attachments), 1, 'customer B sees only its own attachment metadata');
+select ok(not exists(select 1 from public.notifications where organization_id = 'a2000000-0000-4000-8000-000000000001'), 'customer B cannot read customer A notifications');
 
 reset role;
 set local role authenticated;
@@ -241,13 +243,18 @@ select ok(
 );
 
 reset role;
+set session_replication_role = replica;
+update public.support_tickets
+set assigned_to = '91000000-0000-4000-8000-000000000003'
+where id = 'e1000000-0000-4000-8000-000000000001';
+set session_replication_role = origin;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-000000000003","role":"authenticated"}';
 select throws_ok(
   $$update public.support_tickets set priority = 'HIGH'
     where id = 'e1000000-0000-4000-8000-000000000001'$$,
   '42501', 'An active support assignment is required',
-  'active but unassigned Beau Roi employee cannot mutate ticket'
+  'ticket assignee without SUPPORT_LEAD scope cannot mutate ticket'
 );
 select throws_ok(
   $$select public.add_support_ticket_message('e1000000-0000-4000-8000-000000000001', 'Unassigned staff reply', false)$$,
@@ -370,10 +377,23 @@ select throws_ok(
   $$update public.support_tickets set priority = 'URGENT' where id = 'e5000000-0000-4000-8000-000000000001'$$,
   '23514', 'Closed support tickets are immutable', 'CLOSED is terminal for normal roles'
 );
+select ok((select count(*) > 0 from public.notifications), 'assigned support lead receives support notifications');
+select ok(not exists(select 1 from public.notifications where link_path not like '/beauroi/support/%'), 'staff notifications contain only Beau Roi support deep links');
+select ok(
+  not exists (
+    select 1 from public.notifications
+    where title || ' ' || body like '%Internal note before response%'
+       or title || ' ' || body like '%First customer-visible staff response%'
+       or title || ' ' || body like '%private/%'
+  ),
+  'staff notifications exclude message bodies, internal notes, and object keys'
+);
 
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-000000000001","role":"authenticated"}';
+select ok((select count(*) > 0 from public.notifications), 'Beau Roi administrator receives customer-created and customer-reply notifications');
+select ok(not exists(select 1 from public.notifications where link_path not like '/beauroi/support/%'), 'administrator notification inbox contains only staff support links');
 select lives_ok(
   $$update public.support_tickets set priority = 'URGENT' where id = 'e2000000-0000-4000-8000-000000000001'$$,
   'Beau Roi administrator override can mutate any customer ticket'
@@ -435,6 +455,24 @@ select throws_ok(
   $$update public.notifications set status = 'READ' where id = '12000000-0000-4000-8000-000000000001'$$,
   '23514', 'Archived notifications cannot be restored', 'archived notification state is terminal'
 );
+select ok(exists(select 1 from public.notifications where title = 'Support ticket is waiting for your response'), 'customer administrator receives waiting-on-customer notification');
+select ok(exists(select 1 from public.notifications where title = 'Support ticket resolved'), 'customer administrator receives resolved notification');
+select ok(not exists(select 1 from public.notifications where link_path not like '/portal/support/%' and id <> '12000000-0000-4000-8000-000000000001'), 'generated customer notifications contain only customer support deep links');
+select ok(
+  not exists (
+    select 1 from public.notifications
+    where title || ' ' || body like '%Internal note before response%'
+       or title || ' ' || body like '%First customer-visible staff response%'
+       or title || ' ' || body like '%private/%'
+  ),
+  'customer notifications exclude message bodies, internal notes, and object keys'
+);
+
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-000000000009","role":"authenticated"}';
+select ok(exists(select 1 from public.notifications where title = 'Beau Roi replied to your support ticket'), 'customer member receives staff-reply notification');
+select ok(not exists(select 1 from public.notifications where user_id <> '91000000-0000-4000-8000-000000000009'), 'customer member notification inbox is recipient-isolated');
 
 reset role;
 select throws_ok(

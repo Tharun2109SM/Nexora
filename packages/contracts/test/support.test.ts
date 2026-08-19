@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createSupportTicketSchema,
+  customerSupportTicketListQuerySchema,
   customerSupportTicketDetailSchema,
   staffSupportQueueQuerySchema,
   staffSupportTicketDetailSchema,
+  supportFilterMetadataResponseSchema,
+  supportNotificationsResponseSchema,
   supportTicketCursorSchema,
+  supportProductsResponseSchema,
   updateSupportAssigneeSchema,
   updateSupportStatusSchema,
 } from '../src/index.js'
@@ -81,6 +85,29 @@ describe('support contracts', () => {
     ).toBe(false)
   })
 
+  it('allows bounded customer subject search without accepting organization scope', () => {
+    expect(customerSupportTicketListQuerySchema.parse({ search: 'login' }).search).toBe('login')
+    expect(
+      customerSupportTicketListQuerySchema.safeParse({ search: 'x'.repeat(121) }).success,
+    ).toBe(false)
+    expect(customerSupportTicketListQuerySchema.safeParse({ organizationId: id }).success).toBe(
+      false,
+    )
+  })
+
+  it('returns only safe support product display fields', () => {
+    expect(
+      supportProductsResponseSchema.safeParse({
+        data: [{ code: 'NEXORA', id, name: 'NEXORA' }],
+      }).success,
+    ).toBe(true)
+    expect(
+      supportProductsResponseSchema.safeParse({
+        data: [{ code: 'NEXORA', id, name: 'NEXORA', organizationId: id }],
+      }).success,
+    ).toBe(false)
+  })
+
   it('strictly validates narrow staff mutations', () => {
     expect(
       updateSupportStatusSchema.safeParse({ status: 'RESOLVED', resolutionSummary: 'Fixed' })
@@ -120,6 +147,14 @@ describe('support contracts', () => {
     expect(
       staffSupportTicketDetailSchema.safeParse({
         ...baseDetail,
+        capabilities: {
+          canAddInternalNote: true,
+          canAssign: true,
+          canChangeCategory: true,
+          canChangePriority: true,
+          canChangeStatus: true,
+          canReply: true,
+        },
         messages: [
           {
             attachments: [],
@@ -132,5 +167,44 @@ describe('support contracts', () => {
         ],
       }).success,
     ).toBe(true)
+  })
+
+  it('strictly exposes safe filter metadata and notification presentation', () => {
+    expect(
+      supportFilterMetadataResponseSchema.safeParse({
+        data: { assignees: [], categories: [], organizations: [], products: [] },
+      }).success,
+    ).toBe(true)
+    expect(
+      supportNotificationsResponseSchema.safeParse({
+        data: [
+          {
+            body: 'A support ticket changed.',
+            category: 'SUPPORT',
+            createdAt: timestamp,
+            id,
+            linkPath: `/portal/support/${id}`,
+            status: 'UNREAD',
+            title: 'SUP-1 · Support request',
+          },
+        ],
+      }).success,
+    ).toBe(true)
+    expect(
+      supportNotificationsResponseSchema.safeParse({
+        data: [
+          {
+            body: 'unsafe',
+            category: 'SUPPORT',
+            createdAt: timestamp,
+            id,
+            linkPath: `/portal/support/${id}`,
+            objectKey: 'private/key',
+            status: 'UNREAD',
+            title: 'unsafe',
+          },
+        ],
+      }).success,
+    ).toBe(false)
   })
 })

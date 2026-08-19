@@ -1,14 +1,17 @@
 'use client'
 
-import { ChevronRight, LogOut, Menu, PanelLeftClose, X } from 'lucide-react'
+import { Bell, Check, ChevronRight, LogOut, Menu, PanelLeftClose, X } from 'lucide-react'
+import { supportNotificationsResponseSchema } from '@nexora/contracts'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
 import { signOutAction } from '@/app/auth/actions'
+import { markSupportNotificationRead } from '@/app/notification-actions'
 import type { NavigationItem } from '@/lib/navigation'
 import { cn } from '@/lib/utils'
 import type { Viewer } from '@/lib/viewer'
+import type { z } from 'zod'
 
 import { Brand } from './brand'
 import { NavigationIcon } from './navigation-icon'
@@ -17,6 +20,7 @@ import { ThemeToggle } from './theme-toggle'
 interface AppShellProps {
   children: React.ReactNode
   navigation: readonly NavigationItem[]
+  notifications: z.infer<typeof supportNotificationsResponseSchema>['data']
   portalLabel: string
   viewer: Viewer
 }
@@ -48,7 +52,13 @@ function getDesktopSnapshot(): boolean {
   return window.matchMedia('(min-width: 1024px)').matches
 }
 
-export function AppShell({ children, navigation, portalLabel, viewer }: AppShellProps) {
+export function AppShell({
+  children,
+  navigation,
+  notifications,
+  portalLabel,
+  viewer,
+}: AppShellProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [desktopCompact, setDesktopCompact] = useState(false)
@@ -215,12 +225,71 @@ export function AppShell({ children, navigation, portalLabel, viewer }: AppShell
               </span>
             </div>
           </div>
-          <ThemeToggle compact />
+          <div className="flex items-center gap-2">
+            <SupportNotifications notifications={notifications} pathname={pathname} />
+            <ThemeToggle compact />
+          </div>
         </header>
         <main className="mx-auto w-full max-w-[96rem] px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
           {children}
         </main>
       </div>
     </div>
+  )
+}
+
+function SupportNotifications({
+  notifications,
+  pathname,
+}: {
+  notifications: z.infer<typeof supportNotificationsResponseSchema>['data']
+  pathname: string
+}) {
+  const unread = notifications.filter((item) => item.status === 'UNREAD').length
+  return (
+    <details className="group relative">
+      <summary
+        aria-label={`Support notifications${unread ? `, ${unread} unread` : ''}`}
+        className="relative grid size-9 cursor-pointer list-none place-items-center rounded-md border border-border bg-surface text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden"
+      >
+        <Bell aria-hidden size={17} />
+        {unread > 0 && (
+          <span className="absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.62rem] font-semibold text-white">
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+      </summary>
+      <section className="absolute top-12 right-0 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-border bg-surface p-3 shadow-xl">
+        <h2 className="px-2 py-1 font-display text-base font-semibold">Support notifications</h2>
+        {notifications.length === 0 ? (
+          <p className="px-2 py-5 text-sm text-muted">No support notifications yet.</p>
+        ) : (
+          <ul className="mt-2 max-h-80 divide-y divide-border overflow-y-auto">
+            {notifications.map((item) => (
+              <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 py-3" key={item.id}>
+                <Link
+                  className="min-w-0 rounded px-2 focus-visible:outline-2 focus-visible:outline-accent"
+                  href={item.linkPath}
+                >
+                  <p className="truncate text-sm font-semibold">{item.title}</p>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{item.body}</p>
+                </Link>
+                {item.status === 'UNREAD' && (
+                  <form action={markSupportNotificationRead.bind(null, item.id, pathname)}>
+                    <button
+                      aria-label={`Mark ${item.title} as read`}
+                      className="grid size-8 place-items-center rounded-md text-muted hover:bg-surface-subtle hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent"
+                      type="submit"
+                    >
+                      <Check aria-hidden size={15} />
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </details>
   )
 }

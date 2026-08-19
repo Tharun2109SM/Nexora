@@ -8,6 +8,12 @@ import {
   staffSupportTicketDetailSchema,
   staffSupportQueueQuerySchema,
   supportCategoriesQuerySchema,
+  supportEligibleAssigneesResponseSchema,
+  supportFilterMetadataResponseSchema,
+  supportIdentifierResponseSchema,
+  supportNotificationParameterSchema,
+  supportNotificationsResponseSchema,
+  supportProductsResponseSchema,
   supportTicketCursorSchema,
   supportTicketListResponseSchema,
   supportTicketParameterSchema,
@@ -102,9 +108,6 @@ const attachmentRowSchema = z
     size_bytes: z.coerce.number().int().nonnegative(),
   })
   .strict()
-const supportIdentifierResponseSchema = z
-  .object({ data: z.object({ id: z.uuid() }).strict() })
-  .strict()
 const supportCategoriesResponseSchema = z
   .object({
     data: z.array(
@@ -119,6 +122,36 @@ const supportCategoriesResponseSchema = z
         })
         .strict(),
     ),
+  })
+  .strict()
+const subscribedProductRowSchema = z
+  .object({
+    product: z.object({ code: z.string(), id: z.uuid(), name: z.string() }).strict(),
+    product_id: z.uuid(),
+  })
+  .strict()
+const staffMembershipRowSchema = z
+  .object({
+    organizations: z
+      .object({ is_active: z.boolean(), organization_type: z.enum(['BEAUROI', 'CUSTOMER']) })
+      .strict(),
+    role: z.enum(['BEAUROI_ADMIN', 'BEAUROI_EMPLOYEE']),
+    user_id: z.uuid(),
+  })
+  .strict()
+const supportAssignmentCandidateSchema = z.object({ employee_user_id: z.uuid() }).strict()
+const productMetadataRowSchema = z
+  .object({ code: z.string(), id: z.uuid(), name: z.string() })
+  .strict()
+const notificationRowSchema = z
+  .object({
+    body: z.string(),
+    category: z.string(),
+    created_at: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+    link_path: z.string().nullable(),
+    status: z.enum(['UNREAD', 'READ', 'ARCHIVED']),
+    title: z.string(),
   })
   .strict()
 
@@ -217,6 +250,85 @@ function category(row: z.infer<typeof categoryRelationSchema> | null) {
       }
     : null
 }
+
+function capabilities(allowed: boolean) {
+  return {
+    canAddInternalNote: allowed,
+    canAssign: allowed,
+    canChangeCategory: allowed,
+    canChangePriority: allowed,
+    canChangeStatus: allowed,
+    canReply: allowed,
+  }
+}
+
+async function supportCapabilities(
+  client: CallerClient,
+  identity: ReturnType<typeof identityFor>,
+  ticket: z.infer<typeof ticketRowSchema>,
+) {
+  if (identity.role === 'BEAUROI_ADMIN') return capabilities(true)
+  if (identity.role !== 'BEAUROI_EMPLOYEE') return capabilities(false)
+  let query = client
+    .from('customer_assignments')
+    .select('employee_user_id')
+    .eq('employee_user_id', identity.userId)
+    .eq('organization_id', ticket.organization_id)
+    .eq('assignment_type', 'SUPPORT_LEAD')
+    .eq('is_active', true)
+    .is('ended_at', null)
+  query = ticket.product_id
+    ? query.or(`product_id.is.null,product_id.eq.${ticket.product_id}`)
+    : query.is('product_id', null)
+  const result = await query.limit(1)
+  throwSupportDatabaseError(result.error, 'Support capabilities are unavailable.')
+  return capabilities(z.array(supportAssignmentCandidateSchema).parse(result.data).length > 0)
+}
+
+async function eligibleSupportPeople(
+  client: CallerClient,
+  scope?: { organizationId: string; productId: string | null },
+) {
+  const membershipResult = await client
+    .from('organization_memberships')
+    .select('user_id,role,organizations!inner(organization_type,is_active)')
+    .eq('status', 'ACTIVE')
+    .in('role', ['BEAUROI_ADMIN', 'BEAUROI_EMPLOYEE'])
+    .eq('organizations.organization_type', 'BEAUROI')
+    .eq('organizations.is_active', true)
+  throwSupportDatabaseError(membershipResult.error, 'Eligible support staff are unavailable.')
+
+  let assignmentQuery = client
+    .from('customer_assignments')
+    .select('employee_user_id')
+    .eq('assignment_type', 'SUPPORT_LEAD')
+    .eq('is_active', true)
+    .is('ended_at', null)
+  if (scope) {
+    assignmentQuery = assignmentQuery.eq('organization_id', scope.organizationId)
+    assignmentQuery = scope.productId
+      ? assignmentQuery.or(`product_id.is.null,product_id.eq.${scope.productId}`)
+      : assignmentQuery.is('product_id', null)
+  }
+  const assignmentResult = await assignmentQuery
+  throwSupportDatabaseError(assignmentResult.error, 'Eligible support staff are unavailable.')
+
+  const memberships = z.array(staffMembershipRowSchema).parse(membershipResult.data)
+  const assigned = new Set(
+    z
+      .array(supportAssignmentCandidateSchema)
+      .parse(assignmentResult.data)
+      .map((row) => row.employee_user_id),
+  )
+  const ids = memberships
+    .filter((membership) => membership.role === 'BEAUROI_ADMIN' || assigned.has(membership.user_id))
+    .map((membership) => membership.user_id)
+  const people = await profiles(client, ids)
+  return [...people.values()]
+    .map((row) => person(row))
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+    .sort((left, right) => left.fullName.localeCompare(right.fullName))
+}
 function attachment(row: z.infer<typeof attachmentRowSchema>) {
   return {
     contentType: row.content_type,
@@ -276,7 +388,13 @@ function throwSupportDatabaseError(
   throw new AppError(400, 'SUPPORT_OPERATION_FAILED', message)
 }
 
-async function ticketDetail(client: CallerClient, ticketId: string, staff: boolean, now: Date) {
+async function ticketDetail(
+  client: CallerClient,
+  ticketId: string,
+  staff: boolean,
+  identity: ReturnType<typeof identityFor>,
+  now: Date,
+) {
   const ticketResult = await client
     .from('support_tickets')
     .select(TICKET_SELECT)
@@ -337,6 +455,7 @@ async function ticketDetail(client: CallerClient, ticketId: string, staff: boole
     throw new AppError(500, 'SUPPORT_DATA_INVALID', 'The ticket requester is unavailable.')
   return {
     ...base,
+    ...(staff ? { capabilities: await supportCapabilities(client, identity, ticket) } : {}),
     events: events.map((row) => ({
       actor: person(row.actor_user_id ? people.get(row.actor_user_id) : undefined),
       createdAt: row.created_at,
@@ -380,12 +499,12 @@ export function createSupportRouter(dependencies: SupportRouterDependencies = {}
     if (input.status) query = query.eq('status', input.status)
     if (input.productId) query = query.eq('product_id', input.productId)
     if (input.categoryId) query = query.eq('category_id', input.categoryId)
+    if (input.search) query = query.ilike('subject', `%${input.search}%`)
     if (staff) {
       const staffInput = staffSupportQueueQuerySchema.parse(input)
       if (staffInput.organizationId) query = query.eq('organization_id', staffInput.organizationId)
       if (staffInput.assigneeId) query = query.eq('assigned_to', staffInput.assigneeId)
       if (staffInput.priority) query = query.eq('priority', staffInput.priority)
-      if (staffInput.search) query = query.ilike('subject', `%${staffInput.search}%`)
     }
     const dateColumn = input.sort === 'activity-desc' ? 'last_activity_at' : 'created_at'
     const ascending = input.sort === 'created-asc'
@@ -422,6 +541,63 @@ export function createSupportRouter(dependencies: SupportRouterDependencies = {}
   })
   router.get('/support/queue', requireBeauRoi, async (request, response) => {
     await list(request, response, true)
+  })
+
+  router.get('/support/filter-metadata', requireBeauRoi, async (request, response) => {
+    const client = createClient(request.accessToken)
+    const [organizationResult, productResult, categoryResult, assignees] = await Promise.all([
+      client
+        .from('organizations')
+        .select('id,name')
+        .eq('organization_type', 'CUSTOMER')
+        .eq('is_active', true)
+        .order('name')
+        .order('id'),
+      client
+        .from('products')
+        .select('id,code,name')
+        .eq('status', 'ACTIVE')
+        .order('name')
+        .order('id'),
+      client
+        .from('support_categories')
+        .select('id,code,name,description,product_id,is_active')
+        .eq('is_active', true)
+        .order('sort_order')
+        .order('name')
+        .order('id'),
+      eligibleSupportPeople(client),
+    ])
+    throwSupportDatabaseError(organizationResult.error, 'Support filter metadata is unavailable.')
+    throwSupportDatabaseError(productResult.error, 'Support filter metadata is unavailable.')
+    throwSupportDatabaseError(categoryResult.error, 'Support filter metadata is unavailable.')
+    response.json(
+      supportFilterMetadataResponseSchema.parse({
+        data: {
+          assignees,
+          categories: z.array(categoryRelationSchema).parse(categoryResult.data).map(category),
+          organizations: z.array(relationSchema).parse(organizationResult.data),
+          products: z.array(productMetadataRowSchema).parse(productResult.data),
+        },
+      }),
+    )
+  })
+
+  router.get('/support/products', async (request, response) => {
+    const identity = identityFor(request)
+    requireCustomer(identity.role)
+    const result = await createClient(request.accessToken)
+      .from('customer_subscriptions')
+      .select(
+        'product_id,product:products!customer_subscriptions_product_id_fkey!inner(id,code,name)',
+      )
+      .eq('organization_id', identity.organizationId)
+      .eq('status', 'ACTIVE')
+      .order('product(name)')
+      .order('product_id')
+    throwSupportDatabaseError(result.error, 'Support products are unavailable.')
+    const rows = z.array(subscribedProductRowSchema).parse(result.data)
+    response.json(supportProductsResponseSchema.parse({ data: rows.map((row) => row.product) }))
   })
 
   router.get('/support/categories', async (request, response) => {
@@ -474,13 +650,95 @@ export function createSupportRouter(dependencies: SupportRouterDependencies = {}
 
   router.get('/support/tickets/:ticketId', async (request, response) => {
     const { ticketId } = supportTicketParameterSchema.parse(request.params)
-    const staff = BEAUROI_ROLES.includes(identityFor(request).role)
-    const data = await ticketDetail(createClient(request.accessToken), ticketId, staff, now())
+    const identity = identityFor(request)
+    const staff = BEAUROI_ROLES.includes(identity.role)
+    const data = await ticketDetail(
+      createClient(request.accessToken),
+      ticketId,
+      staff,
+      identity,
+      now(),
+    )
     response.json({
       data: (staff ? staffSupportTicketDetailSchema : customerSupportTicketDetailSchema).parse(
         data,
       ),
     })
+  })
+
+  router.get(
+    '/support/tickets/:ticketId/eligible-assignees',
+    requireBeauRoi,
+    async (request, response) => {
+      const identity = identityFor(request)
+      const { ticketId } = supportTicketParameterSchema.parse(request.params)
+      const client = createClient(request.accessToken)
+      const result = await client
+        .from('support_tickets')
+        .select(TICKET_SELECT)
+        .eq('id', ticketId)
+        .maybeSingle()
+      throwSupportDatabaseError(result.error, 'The support ticket is unavailable.')
+      if (!result.data)
+        throw new AppError(404, 'SUPPORT_TICKET_NOT_FOUND', 'Support ticket not found.')
+      const ticket = ticketRowSchema.parse(result.data)
+      const ticketCapabilities = await supportCapabilities(client, identity, ticket)
+      if (!ticketCapabilities.canAssign)
+        throw new AppError(403, 'SUPPORT_ACCESS_DENIED', 'Support access is unavailable.')
+      response.json(
+        supportEligibleAssigneesResponseSchema.parse({
+          data: await eligibleSupportPeople(client, {
+            organizationId: ticket.organization_id,
+            productId: ticket.product_id,
+          }),
+        }),
+      )
+    },
+  )
+
+  router.get('/support/notifications', async (request, response) => {
+    const identity = identityFor(request)
+    const client = createClient(request.accessToken)
+    const result = await client
+      .from('notifications')
+      .select('id,title,body,category,link_path,status,created_at')
+      .eq('user_id', identity.userId)
+      .eq('category', 'SUPPORT')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(20)
+    throwSupportDatabaseError(result.error, 'Support notifications are unavailable.')
+    const prefix = CUSTOMER_ROLES_SET.has(identity.role) ? '/portal/support/' : '/beauroi/support/'
+    const data = z
+      .array(notificationRowSchema)
+      .parse(result.data)
+      .filter((row) => row.status !== 'ARCHIVED' && row.link_path?.startsWith(prefix))
+      .map((row) => ({
+        body: row.body,
+        category: 'SUPPORT' as const,
+        createdAt: row.created_at,
+        id: row.id,
+        linkPath: row.link_path,
+        status: row.status,
+        title: row.title,
+      }))
+    response.json(supportNotificationsResponseSchema.parse({ data }))
+  })
+
+  router.patch('/support/notifications/:notificationId/read', async (request, response) => {
+    const identity = identityFor(request)
+    const { notificationId } = supportNotificationParameterSchema.parse(request.params)
+    const result = await createClient(request.accessToken)
+      .from('notifications')
+      .update({ status: 'READ' })
+      .eq('id', notificationId)
+      .eq('user_id', identity.userId)
+      .select('id')
+      .maybeSingle()
+    throwSupportDatabaseError(result.error, 'The support notification could not be updated.')
+    if (!result.data)
+      throw new AppError(404, 'SUPPORT_NOTIFICATION_NOT_FOUND', 'Support notification not found.')
+    response.json(supportIdentifierResponseSchema.parse({ data: result.data }))
   })
 
   const addMessage =
