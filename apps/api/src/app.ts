@@ -17,12 +17,14 @@ import { feedbackRouter } from './routes/feedback.js'
 import { logosRouter } from './routes/logos.js'
 import { meRouter } from './routes/me.js'
 import { organizationsRouter } from './routes/organizations.js'
+import { releasesRouter } from './routes/releases.js'
 import { supportRouter } from './routes/support.js'
 import { workflowsRouter } from './routes/workflows.js'
 import type { AccessTokenVerifier } from './types.js'
 
 interface CreateAppOptions {
   feedbackRouter?: Router
+  releasesRouter?: Router
   supportRouter?: Router
 }
 
@@ -95,6 +97,7 @@ export function createApp(
     workflowsRouter,
     options.supportRouter ?? supportRouter,
     options.feedbackRouter ?? feedbackRouter,
+    options.releasesRouter ?? releasesRouter,
   )
   app.use(notFoundHandler)
   app.use(errorHandler)

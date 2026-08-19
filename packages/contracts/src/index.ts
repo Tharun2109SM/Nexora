@@ -688,7 +688,7 @@ export const staffSupportTicketDetailSchema = supportTicketDetailBaseSchema
 export const supportNotificationSchema = z
   .object({
     body: z.string(),
-    category: z.enum(['SUPPORT', 'FEEDBACK']),
+    category: z.enum(['SUPPORT', 'FEEDBACK', 'RELEASE']),
     createdAt: z.iso.datetime({ offset: true }),
     id: z.uuid(),
     linkPath: z.string().startsWith('/'),
@@ -931,3 +931,234 @@ export const updateFeedbackTriageSchema = z
     severity: feedbackSeveritySchema.nullable(),
   })
   .strict()
+
+export const releaseStatusSchema = z.enum(['DRAFT', 'SCHEDULED', 'PUBLISHED', 'ARCHIVED'])
+export const maintenanceStatusSchema = z.enum([
+  'DRAFT',
+  'SCHEDULED',
+  'ACTIVE',
+  'COMPLETED',
+  'CANCELLED',
+])
+export const releaseAudienceSchema = z.enum(['ALL_SUBSCRIBERS', 'SELECTED_ORGANIZATIONS'])
+export const releaseSectionCategorySchema = z.enum([
+  'NEW_FEATURE',
+  'IMPROVEMENT',
+  'BUG_FIX',
+  'SECURITY',
+  'DEPRECATION',
+  'IMPORTANT_CHANGE',
+])
+export const releaseRelationSchema = z.object({ id: z.uuid(), name: z.string() }).strict()
+export const releaseProductSchema = releaseRelationSchema.extend({ code: z.string() }).strict()
+export const customerReleaseListItemSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    customerVisible: z.boolean(),
+    id: z.uuid(),
+    lastActivityAt: z.iso.datetime({ offset: true }),
+    product: releaseProductSchema,
+    publishedAt: z.iso.datetime({ offset: true }).nullable(),
+    releaseDate: z.iso.datetime({ offset: true }).nullable(),
+    scheduledFor: z.iso.datetime({ offset: true }).nullable(),
+    status: releaseStatusSchema,
+    summary: z.string().nullable(),
+    title: z.string(),
+    version: z.string(),
+  })
+  .strict()
+export const releaseListItemSchema = customerReleaseListItemSchema
+  .extend({
+    audience: releaseAudienceSchema,
+    targetCount: z.coerce.number().int().nonnegative(),
+  })
+  .strict()
+export const releaseEventSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    customerVisible: z.boolean(),
+    eventType: z.string(),
+    id: z.uuid(),
+  })
+  .strict()
+export const releaseSectionSchema = z
+  .object({
+    body: z.string(),
+    category: releaseSectionCategorySchema,
+    id: z.uuid(),
+    sortOrder: z.number().int().nonnegative(),
+    title: z.string(),
+  })
+  .strict()
+export const releaseCapabilitiesSchema = z
+  .object({
+    canArchive: z.boolean(),
+    canEdit: z.boolean(),
+    canManageAudience: z.boolean(),
+    canManageMaintenance: z.boolean(),
+    canPublish: z.boolean(),
+    canSchedule: z.boolean(),
+  })
+  .strict()
+export const customerReleaseDetailSchema = customerReleaseListItemSchema
+  .extend({
+    events: z.array(releaseEventSchema.omit({ customerVisible: true })),
+    releaseNotes: z.string().nullable(),
+    sections: z.array(releaseSectionSchema),
+    storage: z.object({ attachmentsAvailable: z.boolean() }).strict(),
+  })
+  .strict()
+export const staffReleaseDetailSchema = releaseListItemSchema
+  .extend({
+    capabilities: releaseCapabilitiesSchema,
+    events: z.array(releaseEventSchema),
+    feedbackLinks: z.array(z.object({ feedbackId: z.uuid(), title: z.string() }).strict()),
+    releaseNotes: z.string().nullable(),
+    sections: z.array(releaseSectionSchema),
+    storage: z.object({ attachmentsAvailable: z.boolean() }).strict(),
+    targets: z.array(releaseRelationSchema),
+  })
+  .strict()
+export const releaseListResponseSchema = z
+  .object({ data: z.array(releaseListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerReleaseListResponseSchema = z
+  .object({ data: z.array(customerReleaseListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerMaintenanceListItemSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    customerVisible: z.boolean(),
+    description: z.string(),
+    endsAt: z.iso.datetime({ offset: true }).nullable(),
+    id: z.uuid(),
+    lastActivityAt: z.iso.datetime({ offset: true }),
+    product: releaseProductSchema,
+    startsAt: z.iso.datetime({ offset: true }),
+    status: maintenanceStatusSchema,
+    title: z.string(),
+  })
+  .strict()
+export const maintenanceListItemSchema = customerMaintenanceListItemSchema
+  .extend({
+    audience: releaseAudienceSchema,
+    targetCount: z.coerce.number().int().nonnegative(),
+    targets: z.array(releaseRelationSchema),
+  })
+  .strict()
+export const maintenanceListResponseSchema = z
+  .object({ data: z.array(maintenanceListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerMaintenanceListResponseSchema = z
+  .object({ data: z.array(customerMaintenanceListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerReleaseOverviewSchema = z
+  .object({
+    currentVersions: z.array(
+      z.object({ currentVersion: z.string().nullable(), product: releaseProductSchema }).strict(),
+    ),
+    maintenance: z.array(customerMaintenanceListItemSchema),
+    releases: z.array(customerReleaseListItemSchema),
+  })
+  .strict()
+export const releaseCurrentVersionsResponseSchema = customerReleaseOverviewSchema.pick({
+  currentVersions: true,
+})
+export const releaseFilterMetadataResponseSchema = z
+  .object({
+    data: z
+      .object({
+        featureRequests: z.array(
+          z.object({ id: z.uuid(), productId: z.uuid(), title: z.string() }).strict(),
+        ),
+        organizations: z.array(releaseRelationSchema),
+        products: z.array(releaseProductSchema),
+      })
+      .strict(),
+  })
+  .strict()
+const releaseListQueryBase = z.object({
+  cursor: z.string().max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  productId: z.uuid().optional(),
+  search: z.string().trim().min(1).max(120).optional(),
+  sort: z.enum(['activity-desc', 'date-asc', 'date-desc']).default('activity-desc'),
+})
+export const customerReleaseListQuerySchema = releaseListQueryBase.strict()
+export const staffReleaseListQuerySchema = releaseListQueryBase
+  .extend({ status: releaseStatusSchema.optional() })
+  .strict()
+export const maintenanceListQuerySchema = z
+  .object({
+    cursor: z.string().max(2048).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    productId: z.uuid().optional(),
+    status: maintenanceStatusSchema.optional(),
+  })
+  .strict()
+export const releaseParameterSchema = z.object({ releaseId: z.uuid() }).strict()
+export const maintenanceParameterSchema = z.object({ noticeId: z.uuid() }).strict()
+export const releaseIdentifierResponseSchema = z
+  .object({ data: z.object({ id: z.uuid() }).strict() })
+  .strict()
+export const createReleaseSchema = z
+  .object({
+    productId: z.uuid(),
+    releaseNotes: z.string().trim().max(50000).nullable().optional(),
+    summary: z.string().trim().max(2000).nullable().optional(),
+    title: z.string().trim().min(3).max(240),
+    version: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/),
+  })
+  .strict()
+export const updateReleaseContentSchema = createReleaseSchema
+  .omit({ productId: true, version: true })
+  .strict()
+export const updateReleaseAudienceSchema = z
+  .object({
+    mode: releaseAudienceSchema,
+    organizationIds: z.array(z.uuid()).max(500).default([]),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.mode === 'SELECTED_ORGANIZATIONS' && value.organizationIds.length === 0)
+      context.addIssue({ code: 'custom', message: 'Select at least one organization.' })
+  })
+export const upsertReleaseSectionSchema = z
+  .object({
+    body: z.string().trim().min(1).max(10000),
+    category: releaseSectionCategorySchema,
+    sectionId: z.uuid().nullable().optional(),
+    sortOrder: z.number().int().min(0).max(10000).default(0),
+    title: z.string().trim().min(2).max(160),
+  })
+  .strict()
+export const transitionReleaseSchema = z
+  .object({
+    scheduledFor: z.iso.datetime({ offset: true }).nullable().optional(),
+    status: releaseStatusSchema,
+  })
+  .strict()
+export const linkReleaseFeedbackSchema = z.object({ feedbackId: z.uuid() }).strict()
+const maintenanceMutationBaseSchema = z
+  .object({
+    description: z.string().trim().min(1).max(30000),
+    endsAt: z.iso.datetime({ offset: true }).nullable().optional(),
+    startsAt: z.iso.datetime({ offset: true }),
+    title: z.string().trim().min(3).max(240),
+  })
+  .strict()
+export const createMaintenanceSchema = maintenanceMutationBaseSchema
+  .extend({ productId: z.uuid() })
+  .strict()
+  .refine((value) => !value.endsAt || value.endsAt > value.startsAt, {
+    message: 'Expected end must follow the start time.',
+    path: ['endsAt'],
+  })
+export const updateMaintenanceSchema = maintenanceMutationBaseSchema.refine(
+  (value) => !value.endsAt || value.endsAt > value.startsAt,
+  { message: 'Expected end must follow the start time.', path: ['endsAt'] },
+)
+export const transitionMaintenanceSchema = z.object({ status: maintenanceStatusSchema }).strict()

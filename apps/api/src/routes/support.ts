@@ -703,14 +703,14 @@ export function createSupportRouter(dependencies: SupportRouterDependencies = {}
       .from('notifications')
       .select('id,title,body,category,link_path,status,created_at')
       .eq('user_id', identity.userId)
-      .in('category', ['SUPPORT', 'FEEDBACK'])
+      .in('category', ['SUPPORT', 'FEEDBACK', 'RELEASE'])
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(20)
     throwSupportDatabaseError(result.error, 'Support notifications are unavailable.')
     const prefixes = CUSTOMER_ROLES_SET.has(identity.role)
-      ? ['/portal/support/', '/portal/feedback/']
-      : ['/beauroi/support/', '/beauroi/feedback/']
+      ? ['/portal/support/', '/portal/feedback/', '/portal/releases']
+      : ['/beauroi/support/', '/beauroi/feedback/', '/beauroi/releases']
     const data = z
       .array(notificationRowSchema)
       .parse(result.data)
@@ -722,7 +722,7 @@ export function createSupportRouter(dependencies: SupportRouterDependencies = {}
       )
       .map((row) => ({
         body: row.body,
-        category: row.category as 'SUPPORT' | 'FEEDBACK',
+        category: row.category as 'SUPPORT' | 'FEEDBACK' | 'RELEASE',
         createdAt: row.created_at,
         id: row.id,
         linkPath: row.link_path,
