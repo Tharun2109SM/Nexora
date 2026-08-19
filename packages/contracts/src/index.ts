@@ -1162,3 +1162,308 @@ export const updateMaintenanceSchema = maintenanceMutationBaseSchema.refine(
   { message: 'Expected end must follow the start time.', path: ['endsAt'] },
 )
 export const transitionMaintenanceSchema = z.object({ status: maintenanceStatusSchema }).strict()
+
+// Milestone 7 — Knowledge Base
+export const knowledgeArticleStatusSchema = z.enum(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'ARCHIVED'])
+export const knowledgeAudienceSchema = z.enum([
+  'INTERNAL',
+  'ALL_CUSTOMERS',
+  'PRODUCT_SCOPED',
+  'SELECTED_ORGANIZATION',
+])
+export const knowledgeArticleTypeSchema = z.enum([
+  'GUIDE',
+  'FAQ',
+  'REFERENCE',
+  'TROUBLESHOOTING',
+  'ANNOUNCEMENT',
+])
+export const knowledgeRelationSchema = z.object({ id: z.uuid(), name: z.string() }).strict()
+export const knowledgeProductSchema = knowledgeRelationSchema.extend({ code: z.string() }).strict()
+export const knowledgeCategorySchema = z
+  .object({
+    code: z.string(),
+    description: z.string().nullable(),
+    id: z.uuid(),
+    isActive: z.boolean(),
+    name: z.string(),
+    product: knowledgeProductSchema.nullable(),
+    sortOrder: z.number().int(),
+  })
+  .strict()
+const customerKnowledgeArticleBaseSchema = z
+  .object({
+    articleType: knowledgeArticleTypeSchema,
+    category: knowledgeRelationSchema.nullable(),
+    externalUrl: z.url().nullable(),
+    id: z.uuid(),
+    product: knowledgeProductSchema.nullable(),
+    publishedAt: z.iso.datetime({ offset: true }),
+    slug: z.string(),
+    summary: z.string().nullable(),
+    title: z.string(),
+    updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+export const customerKnowledgeArticleSchema = customerKnowledgeArticleBaseSchema
+  .extend({ body: z.string() })
+  .strict()
+export const staffKnowledgeArticleSchema = customerKnowledgeArticleBaseSchema
+  .omit({ publishedAt: true })
+  .extend({
+    articleStatus: knowledgeArticleStatusSchema,
+    audience: knowledgeAudienceSchema,
+    organization: knowledgeRelationSchema.nullable(),
+    publishedAt: z.iso.datetime({ offset: true }).nullable(),
+  })
+  .strict()
+export const staffKnowledgeArticleDetailSchema = staffKnowledgeArticleSchema
+  .extend({
+    body: z.string(),
+    createdAt: z.iso.datetime({ offset: true }),
+    events: z.array(
+      z
+        .object({
+          createdAt: z.iso.datetime({ offset: true }),
+          eventType: z.string(),
+          id: z.uuid(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+const knowledgeListBaseSchema = z.object({
+  categoryId: z.uuid().optional(),
+  cursor: z.string().max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  productId: z.uuid().optional(),
+  search: z.string().trim().min(1).max(120).optional(),
+  sort: z.enum(['updated-desc', 'published-desc', 'title-asc']).default('updated-desc'),
+  type: knowledgeArticleTypeSchema.optional(),
+})
+export const customerKnowledgeListQuerySchema = knowledgeListBaseSchema.strict()
+export const staffKnowledgeListQuerySchema = knowledgeListBaseSchema
+  .extend({ status: knowledgeArticleStatusSchema.optional() })
+  .strict()
+export const customerKnowledgeListResponseSchema = z
+  .object({ data: z.array(customerKnowledgeArticleBaseSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const staffKnowledgeListResponseSchema = z
+  .object({ data: z.array(staffKnowledgeArticleSchema), nextCursor: z.string().nullable() })
+  .strict()
+export const customerKnowledgeDetailResponseSchema = z
+  .object({ data: customerKnowledgeArticleSchema, attachmentsAvailable: z.boolean() })
+  .strict()
+export const staffKnowledgeDetailResponseSchema = z
+  .object({ data: staffKnowledgeArticleDetailSchema, attachmentsAvailable: z.boolean() })
+  .strict()
+export const knowledgeMetadataResponseSchema = z
+  .object({
+    attachmentsAvailable: z.boolean(),
+    categories: z.array(knowledgeCategorySchema),
+    organizations: z.array(knowledgeRelationSchema),
+    products: z.array(knowledgeProductSchema),
+  })
+  .strict()
+export const knowledgeIdentifierResponseSchema = z
+  .object({ data: z.object({ id: z.uuid() }).strict() })
+  .strict()
+export const createKnowledgeArticleSchema = z
+  .object({
+    articleType: knowledgeArticleTypeSchema,
+    audience: knowledgeAudienceSchema,
+    body: z.string().trim().min(1).max(100000),
+    categoryId: z.uuid().nullable().optional(),
+    externalUrl: z
+      .url()
+      .regex(/^https?:\/\//)
+      .nullable()
+      .optional(),
+    organizationId: z.uuid().nullable().optional(),
+    productId: z.uuid().nullable().optional(),
+    summary: z.string().trim().max(2000).nullable().optional(),
+    title: z.string().trim().min(3).max(240),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.audience === 'PRODUCT_SCOPED' && !value.productId)
+      context.addIssue({ code: 'custom', message: 'Product-scoped articles require a product.' })
+    if (value.audience === 'SELECTED_ORGANIZATION' && !value.organizationId)
+      context.addIssue({ code: 'custom', message: 'Select an organization.' })
+    if (value.audience !== 'SELECTED_ORGANIZATION' && value.organizationId)
+      context.addIssue({ code: 'custom', message: 'Organization targeting is not valid here.' })
+  })
+export const updateKnowledgeContentSchema = z
+  .object({
+    body: z.string().trim().min(1).max(100000),
+    externalUrl: z
+      .url()
+      .regex(/^https?:\/\//)
+      .nullable()
+      .optional(),
+    summary: z.string().trim().max(2000).nullable().optional(),
+    title: z.string().trim().min(3).max(240),
+  })
+  .strict()
+export const updateKnowledgeScopeSchema = z
+  .object({
+    articleType: knowledgeArticleTypeSchema,
+    audience: knowledgeAudienceSchema,
+    categoryId: z.uuid().nullable().optional(),
+    organizationId: z.uuid().nullable().optional(),
+    productId: z.uuid().nullable().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.audience === 'PRODUCT_SCOPED' && !value.productId)
+      context.addIssue({ code: 'custom', message: 'Product-scoped articles require a product.' })
+    if (value.audience === 'SELECTED_ORGANIZATION' && !value.organizationId)
+      context.addIssue({ code: 'custom', message: 'Select an organization.' })
+  })
+export const transitionKnowledgeArticleSchema = z
+  .object({ status: knowledgeArticleStatusSchema })
+  .strict()
+export const createKnowledgeCategorySchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .regex(/^[A-Z][A-Z0-9_]{1,63}$/),
+    description: z.string().trim().max(1000).nullable().optional(),
+    name: z.string().trim().min(2).max(120),
+    productId: z.uuid().nullable().optional(),
+    sortOrder: z.number().int().min(0).max(100000).default(0),
+  })
+  .strict()
+export const knowledgeArticleParameterSchema = z.object({ articleId: z.uuid() }).strict()
+export const knowledgeCategoryParameterSchema = z.object({ categoryId: z.uuid() }).strict()
+export const setKnowledgeCategoryActiveSchema = z.object({ active: z.boolean() }).strict()
+
+// Milestone 8 — Analytics & Customer Success
+export const analyticsWindowSchema = z.enum(['7D', '30D', '90D', 'ALL'])
+const nonNegativeCountSchema = z.coerce.number().int().nonnegative()
+const countMapSchema = z.record(z.string(), nonNegativeCountSchema)
+export const analyticsOverviewQuerySchema = z
+  .object({
+    organizationId: z.uuid().optional(),
+    productId: z.uuid().optional(),
+    window: analyticsWindowSchema.default('30D'),
+  })
+  .strict()
+export const analyticsOverviewSchema = z
+  .object({
+    customers: z.object({ active: nonNegativeCountSchema, lifecycle: countMapSchema }).strict(),
+    delivery: z
+      .object({
+        articleTypes: countMapSchema,
+        maintenance: nonNegativeCountSchema,
+        publishedArticles: nonNegativeCountSchema,
+        publishedReleases: nonNegativeCountSchema,
+        scheduledReleases: nonNegativeCountSchema,
+      })
+      .strict(),
+    feedback: z
+      .object({
+        publishedFeatures: nonNegativeCountSchema,
+        statuses: countMapSchema,
+        total: nonNegativeCountSchema,
+        types: countMapSchema,
+        votes: nonNegativeCountSchema,
+      })
+      .strict(),
+    generatedAt: z.iso.datetime({ offset: true }),
+    implementation: z
+      .object({
+        active: nonNegativeCountSchema,
+        completed: nonNegativeCountSchema,
+        overdueMilestones: nonNegativeCountSchema,
+      })
+      .strict(),
+    onboarding: z
+      .object({
+        active: nonNegativeCountSchema,
+        completed: nonNegativeCountSchema,
+        eligible: nonNegativeCountSchema,
+        overduePlans: nonNegativeCountSchema,
+        overdueTasks: nonNegativeCountSchema,
+      })
+      .strict(),
+    support: z
+      .object({
+        active: nonNegativeCountSchema,
+        averageFirstResponseMinutes: z.coerce.number().nonnegative().nullable(),
+        averageResolutionMinutes: z.coerce.number().nonnegative().nullable(),
+        breached: nonNegativeCountSchema,
+        firstResponseEligible: nonNegativeCountSchema,
+        firstResponseMet: nonNegativeCountSchema,
+        priorities: countMapSchema,
+        resolutionEligible: nonNegativeCountSchema,
+        resolutionMet: nonNegativeCountSchema,
+        statuses: countMapSchema,
+      })
+      .strict(),
+    window: analyticsWindowSchema,
+  })
+  .strict()
+export const analyticsOverviewResponseSchema = z.object({ data: analyticsOverviewSchema }).strict()
+export const customerSuccessPortfolioQuerySchema = z
+  .object({
+    afterId: z.uuid().optional(),
+    afterName: z.string().trim().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    productId: z.uuid().optional(),
+    search: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict()
+  .refine((value) => Boolean(value.afterId) === Boolean(value.afterName), {
+    message: 'Both portfolio cursor fields are required.',
+  })
+export const customerSuccessPortfolioItemSchema = z
+  .object({
+    activeTickets: nonNegativeCountSchema,
+    csmName: z.string().nullable(),
+    healthCalculatedAt: z.iso.datetime({ offset: true }).nullable(),
+    healthScore: z.coerce.number().min(0).max(100).nullable(),
+    id: z.uuid(),
+    implementationActive: nonNegativeCountSchema,
+    lifecycleStatus: z.string(),
+    name: z.string(),
+    onboardingActive: nonNegativeCountSchema,
+    onboardingOverdue: z.boolean(),
+    openFeedback: nonNegativeCountSchema,
+    slaBreaches: nonNegativeCountSchema,
+    urgentTickets: nonNegativeCountSchema,
+  })
+  .strict()
+export const customerSuccessPortfolioResponseSchema = z
+  .object({
+    data: z.array(customerSuccessPortfolioItemSchema),
+    next: z.object({ id: z.uuid(), name: z.string() }).strict().nullable(),
+  })
+  .strict()
+export const customerAnalyticsSummarySchema = z
+  .object({
+    activeTickets: nonNegativeCountSchema,
+    generatedAt: z.iso.datetime({ offset: true }),
+    healthHistory: z.array(
+      z
+        .object({
+          calculatedAt: z.iso.datetime({ offset: true }),
+          reason: z.string().nullable(),
+          score: z.coerce.number().min(0).max(100),
+        })
+        .strict(),
+    ),
+    implementationActive: nonNegativeCountSchema,
+    maintenanceNotices: nonNegativeCountSchema,
+    onboardingActive: nonNegativeCountSchema,
+    openFeedback: nonNegativeCountSchema,
+    pendingActions: nonNegativeCountSchema,
+    publishedArticles: nonNegativeCountSchema,
+    recentReleases: nonNegativeCountSchema,
+    window: analyticsWindowSchema,
+  })
+  .strict()
+export const customerAnalyticsSummaryResponseSchema = z
+  .object({ data: customerAnalyticsSummarySchema })
+  .strict()
