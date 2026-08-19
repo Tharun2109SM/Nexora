@@ -517,3 +517,184 @@ export const membershipParameterSchema = z
 export const invitationParameterSchema = z
   .object({ invitationId: z.uuid(), organizationId: z.uuid() })
   .strict()
+
+export const supportTicketStatusSchema = z.enum([
+  'OPEN',
+  'IN_PROGRESS',
+  'WAITING_ON_CUSTOMER',
+  'RESOLVED',
+  'CLOSED',
+])
+export const supportTicketPrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])
+export const supportSlaStateSchema = z.enum([
+  'NOT_CONFIGURED',
+  'PENDING',
+  'MET',
+  'BREACHED',
+  'NOT_APPLICABLE',
+])
+export const supportTicketEventTypeSchema = z.enum([
+  'TICKET_CREATED',
+  'STATUS_CHANGED',
+  'PRIORITY_CHANGED',
+  'CATEGORY_CHANGED',
+  'ASSIGNED',
+  'CUSTOMER_REPLIED',
+  'STAFF_REPLIED',
+  'INTERNAL_NOTE_ADDED',
+  'RESOLVED',
+  'CLOSED',
+])
+
+export const supportPersonSchema = z
+  .object({ designation: z.string().nullable(), fullName: z.string(), id: z.uuid() })
+  .strict()
+export const supportCategorySchema = z
+  .object({
+    code: z.string(),
+    description: z.string().nullable(),
+    id: z.uuid(),
+    isActive: z.boolean(),
+    name: z.string(),
+    productId: z.uuid().nullable(),
+  })
+  .strict()
+export const supportAttachmentSchema = z
+  .object({
+    contentType: z.string(),
+    createdAt: z.iso.datetime({ offset: true }),
+    entityId: z.uuid(),
+    entityType: z.enum(['TICKET', 'TICKET_MESSAGE']),
+    id: z.uuid(),
+    originalFilename: z.string(),
+    sizeBytes: z.coerce.number().int().nonnegative(),
+  })
+  .strict()
+export const supportSlaMetricSchema = z
+  .object({
+    completedAt: z.iso.datetime({ offset: true }).nullable(),
+    dueAt: z.iso.datetime({ offset: true }).nullable(),
+    state: supportSlaStateSchema,
+  })
+  .strict()
+export const supportSlaSummarySchema = z
+  .object({
+    evaluatedAt: z.iso.datetime({ offset: true }),
+    policyConfigured: z.boolean(),
+    resolution: supportSlaMetricSchema,
+    response: supportSlaMetricSchema,
+  })
+  .strict()
+
+export const supportTicketListItemSchema = z
+  .object({
+    assignee: supportPersonSchema.nullable(),
+    category: supportCategorySchema.nullable(),
+    createdAt: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+    lastActivityAt: z.iso.datetime({ offset: true }),
+    organization: z.object({ id: z.uuid(), name: z.string() }).strict(),
+    priority: supportTicketPrioritySchema,
+    product: z.object({ id: z.uuid(), name: z.string() }).strict().nullable(),
+    reference: z.string(),
+    sla: supportSlaSummarySchema,
+    status: supportTicketStatusSchema,
+    subject: z.string(),
+  })
+  .strict()
+export const supportTicketListResponseSchema = z
+  .object({ data: z.array(supportTicketListItemSchema), nextCursor: z.string().nullable() })
+  .strict()
+
+export const supportMessageSchema = z
+  .object({
+    attachments: z.array(supportAttachmentSchema),
+    author: supportPersonSchema.nullable(),
+    body: z.string(),
+    createdAt: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+  })
+  .strict()
+export const staffSupportMessageSchema = supportMessageSchema
+  .extend({ isInternal: z.boolean() })
+  .strict()
+export const supportEventSchema = z
+  .object({
+    actor: supportPersonSchema.nullable(),
+    createdAt: z.iso.datetime({ offset: true }),
+    eventType: supportTicketEventTypeSchema,
+    id: z.uuid(),
+  })
+  .strict()
+export const staffSupportEventSchema = supportEventSchema
+  .extend({ customerVisible: z.boolean() })
+  .strict()
+
+const supportTicketDetailBaseSchema = supportTicketListItemSchema
+  .extend({
+    attachments: z.array(supportAttachmentSchema),
+    description: z.string(),
+    requester: supportPersonSchema,
+    resolutionSummary: z.string().nullable(),
+    storage: z.object({ attachmentsAvailable: z.boolean() }).strict(),
+    updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+export const customerSupportTicketDetailSchema = supportTicketDetailBaseSchema
+  .extend({ events: z.array(supportEventSchema), messages: z.array(supportMessageSchema) })
+  .strict()
+export const staffSupportTicketDetailSchema = supportTicketDetailBaseSchema
+  .extend({
+    events: z.array(staffSupportEventSchema),
+    messages: z.array(staffSupportMessageSchema),
+  })
+  .strict()
+
+export const supportTicketCursorSchema = z
+  .object({
+    id: z.uuid(),
+    sort: z.enum(['activity-desc', 'created-asc', 'created-desc']),
+    value: z.iso.datetime({ offset: true }),
+  })
+  .strict()
+const supportListQueryBase = z.object({
+  categoryId: z.uuid().optional(),
+  cursor: z.string().max(2048).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  productId: z.uuid().optional(),
+  sort: z.enum(['activity-desc', 'created-asc', 'created-desc']).default('activity-desc'),
+  status: supportTicketStatusSchema.optional(),
+})
+export const customerSupportTicketListQuerySchema = supportListQueryBase.strict()
+export const staffSupportQueueQuerySchema = supportListQueryBase
+  .extend({
+    assigneeId: z.uuid().optional(),
+    organizationId: z.uuid().optional(),
+    priority: supportTicketPrioritySchema.optional(),
+    search: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict()
+export const supportCategoriesQuerySchema = z.object({ productId: z.uuid().optional() }).strict()
+export const supportTicketParameterSchema = z.object({ ticketId: z.uuid() }).strict()
+export const createSupportTicketSchema = z
+  .object({
+    categoryId: z.uuid(),
+    description: z.string().trim().min(1).max(20000),
+    productId: z.uuid(),
+    subject: z.string().trim().min(3).max(240),
+  })
+  .strict()
+export const addSupportMessageSchema = z
+  .object({ body: z.string().trim().min(1).max(20000) })
+  .strict()
+export const updateSupportStatusSchema = z
+  .object({
+    resolutionSummary: z.string().trim().min(2).max(10000).nullable().optional(),
+    status: supportTicketStatusSchema,
+  })
+  .strict()
+export const updateSupportPrioritySchema = z
+  .object({ priority: supportTicketPrioritySchema })
+  .strict()
+export const updateSupportCategorySchema = z.object({ categoryId: z.uuid() }).strict()
+export const updateSupportAssigneeSchema = z.object({ assigneeId: z.uuid().nullable() }).strict()

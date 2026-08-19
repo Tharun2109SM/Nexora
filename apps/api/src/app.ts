@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 
 import cors from 'cors'
-import express from 'express'
+import express, { type Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import helmet from 'helmet'
 import pino from 'pino'
@@ -16,10 +16,18 @@ import { customersRouter } from './routes/customers.js'
 import { logosRouter } from './routes/logos.js'
 import { meRouter } from './routes/me.js'
 import { organizationsRouter } from './routes/organizations.js'
+import { supportRouter } from './routes/support.js'
 import { workflowsRouter } from './routes/workflows.js'
 import type { AccessTokenVerifier } from './types.js'
 
-export function createApp(verifier: AccessTokenVerifier = new SupabaseAccessTokenVerifier()) {
+interface CreateAppOptions {
+  supportRouter?: Router
+}
+
+export function createApp(
+  verifier: AccessTokenVerifier = new SupabaseAccessTokenVerifier(),
+  options: CreateAppOptions = {},
+) {
   const app = express()
   const logger = pino({
     level: environment.LOG_LEVEL,
@@ -83,6 +91,7 @@ export function createApp(verifier: AccessTokenVerifier = new SupabaseAccessToke
     organizationsRouter,
     logosRouter,
     workflowsRouter,
+    options.supportRouter ?? supportRouter,
   )
   app.use(notFoundHandler)
   app.use(errorHandler)
