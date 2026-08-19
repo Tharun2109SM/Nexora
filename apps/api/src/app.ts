@@ -13,6 +13,7 @@ import { SupabaseAccessTokenVerifier } from './lib/supabase-verifier.js'
 import { authenticate } from './middleware/auth.js'
 import { healthRouter } from './routes/health.js'
 import { customersRouter } from './routes/customers.js'
+import { feedbackRouter } from './routes/feedback.js'
 import { logosRouter } from './routes/logos.js'
 import { meRouter } from './routes/me.js'
 import { organizationsRouter } from './routes/organizations.js'
@@ -21,6 +22,7 @@ import { workflowsRouter } from './routes/workflows.js'
 import type { AccessTokenVerifier } from './types.js'
 
 interface CreateAppOptions {
+  feedbackRouter?: Router
   supportRouter?: Router
 }
 
@@ -92,6 +94,7 @@ export function createApp(
     logosRouter,
     workflowsRouter,
     options.supportRouter ?? supportRouter,
+    options.feedbackRouter ?? feedbackRouter,
   )
   app.use(notFoundHandler)
   app.use(errorHandler)

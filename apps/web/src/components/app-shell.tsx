@@ -249,7 +249,7 @@ function SupportNotifications({
   return (
     <details className="group relative">
       <summary
-        aria-label={`Support notifications${unread ? `, ${unread} unread` : ''}`}
+        aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}
         className="relative grid size-9 cursor-pointer list-none place-items-center rounded-md border border-border bg-surface text-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden"
       >
         <Bell aria-hidden size={17} />
@@ -260,9 +260,9 @@ function SupportNotifications({
         )}
       </summary>
       <section className="absolute top-12 right-0 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-border bg-surface p-3 shadow-xl">
-        <h2 className="px-2 py-1 font-display text-base font-semibold">Support notifications</h2>
+        <h2 className="px-2 py-1 font-display text-base font-semibold">Notifications</h2>
         {notifications.length === 0 ? (
-          <p className="px-2 py-5 text-sm text-muted">No support notifications yet.</p>
+          <p className="px-2 py-5 text-sm text-muted">No notifications yet.</p>
         ) : (
           <ul className="mt-2 max-h-80 divide-y divide-border overflow-y-auto">
             {notifications.map((item) => (
