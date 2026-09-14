@@ -97,6 +97,50 @@ export const lifecycleStatuses = ['DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARC
 export const lifecycleStatusSchema = z.enum(lifecycleStatuses)
 export type LifecycleStatus = z.infer<typeof lifecycleStatusSchema>
 
+export const createProductSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .min(2, 'Enter a product code')
+      .max(40, 'Product code must not exceed 40 characters')
+      .transform((value) => value.toUpperCase())
+      .pipe(
+        z
+          .string()
+          .regex(
+            /^[A-Z][A-Z0-9_-]+$/,
+            'Use letters, numbers, hyphens, or underscores and begin with a letter',
+          ),
+      ),
+    description: z.string().trim().max(2000).nullable().default(null),
+    name: z.string().trim().min(2, 'Enter a product name').max(160),
+  })
+  .strict()
+export type CreateProductInput = z.infer<typeof createProductSchema>
+
+export const activateCustomerProductSchema = z
+  .object({ organizationId: z.uuid(), productId: z.uuid() })
+  .strict()
+
+export const productRecordSchema = z
+  .object({
+    code: z.string(),
+    createdAt: z.iso.datetime({ offset: true }),
+    description: z.string().nullable(),
+    id: z.uuid(),
+    name: z.string(),
+    status: lifecycleStatusSchema,
+  })
+  .strict()
+export type ProductRecord = z.infer<typeof productRecordSchema>
+
+export const productListResponseSchema = z.object({ data: z.array(productRecordSchema) }).strict()
+
+export const productIdentifierResponseSchema = z
+  .object({ data: z.object({ id: z.uuid() }).strict() })
+  .strict()
+
 export const customerAssignmentTypes = ['CSM', 'IMPLEMENTATION_ENGINEER'] as const
 export const customerAssignmentTypeSchema = z.enum(customerAssignmentTypes)
 export type CustomerAssignmentType = z.infer<typeof customerAssignmentTypeSchema>

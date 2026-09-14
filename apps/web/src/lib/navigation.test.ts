@@ -13,11 +13,12 @@ describe('portal navigation contracts', () => {
     }
   })
 
-  it('exposes the overview plus all eight Beau Roi modules', () => {
-    expect(beauroiNavigation).toHaveLength(9)
+  it('exposes product management alongside the Beau Roi modules', () => {
+    expect(beauroiNavigation).toHaveLength(10)
     expect(beauroiNavigation.map((item) => item.href)).toEqual([
       '/beauroi',
       '/beauroi/customers',
+      '/beauroi/products',
       '/beauroi/onboarding',
       '/beauroi/implementation',
       '/beauroi/support',
