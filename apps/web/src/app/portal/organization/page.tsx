@@ -1,4 +1,5 @@
-import { BriefcaseBusiness, Building2, MailPlus, ShieldCheck, Users } from 'lucide-react'
+import { customerProductsResponseSchema } from '@nexora/contracts'
+import { BriefcaseBusiness, Building2, MailPlus, Package, ShieldCheck, Users } from 'lucide-react'
 import type { Metadata } from 'next'
 
 import {
@@ -28,6 +29,9 @@ export default async function OrganizationPage({ searchParams }: OrganizationPag
   const result = organizationResponseSchema.parse(
     await apiRequest(`/organizations/${viewer.organizationId}`),
   ).data
+  const assignedProducts = customerProductsResponseSchema.parse(
+    await apiRequest(`/customers/${viewer.organizationId}/products`),
+  ).data
   const canAdminister = viewer.role === 'CUSTOMER_ADMIN'
   const invitationLink = (await searchParams).invitation
   const profileById = new Map(result.assignmentProfiles.map((profile) => [profile.id, profile]))
@@ -51,6 +55,27 @@ export default async function OrganizationPage({ searchParams }: OrganizationPag
         </section>
       )}
       <div className="grid gap-6 xl:grid-cols-2">
+        <Panel icon={<Package size={18} />} title="Your products">
+          {assignedProducts.length === 0 ? (
+            <p className="text-sm text-muted">
+              No products have been assigned to your organization yet.
+            </p>
+          ) : (
+            <div className="divide-y divide-border">
+              {assignedProducts.map((product) => (
+                <div className="py-3" key={product.id}>
+                  <p className="text-sm font-semibold">{product.productName}</p>
+                  <p className="text-xs text-muted">
+                    {product.productCode} ·{' '}
+                    {product.status === 'ACTIVE'
+                      ? 'Available for new workflows'
+                      : 'Historical access'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
         <Panel icon={<Building2 size={18} />} title="Company profile">
           <div className="mb-5 flex items-center gap-4">
             <span className="grid size-14 place-items-center rounded-lg bg-accent-soft font-display text-2xl font-semibold text-accent">

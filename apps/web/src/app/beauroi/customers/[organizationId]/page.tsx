@@ -1,4 +1,8 @@
-import { customerDetailResponseSchema } from '@nexora/contracts'
+import {
+  customerDetailResponseSchema,
+  customerProductsResponseSchema,
+  productListResponseSchema,
+} from '@nexora/contracts'
 import {
   ArrowLeft,
   BriefcaseBusiness,
@@ -8,6 +12,7 @@ import {
   History,
   ImageIcon,
   MailPlus,
+  Package,
   ShieldCheck,
   Users,
 } from 'lucide-react'
@@ -29,6 +34,7 @@ import {
 import { ConfirmSubmit } from '@/components/confirm-submit'
 import { CopyField } from '@/components/copy-field'
 import { HealthIndicator } from '@/components/health-indicator'
+import { CustomerProductAssignForm, CustomerProductToggle } from '@/components/product-management'
 import { PageHeader } from '@/components/ui'
 import { apiRequest, ApiRequestError } from '@/lib/api'
 import { staffCustomerPresentation } from '@/lib/staff-customer-presentation'
@@ -69,7 +75,14 @@ export default async function CustomerDetailPage({ params, searchParams }: Detai
     if (error instanceof ApiRequestError && error.code === 'NOT_FOUND') notFound()
     throw error
   }
-  const staff = staffSchema.parse(await apiRequest('/staff')).data
+  const [staffResult, productsResult, catalogResult] = await Promise.all([
+    apiRequest('/staff'),
+    apiRequest(`/customers/${organizationId}/products`),
+    apiRequest('/products?status=ACTIVE&limit=100'),
+  ])
+  const staff = staffSchema.parse(staffResult).data
+  const customerProducts = customerProductsResponseSchema.parse(productsResult).data
+  const catalog = productListResponseSchema.parse(catalogResult).data
   const { organization } = result.data
   const latestHealth = result.data.healthHistory[0]?.score ?? null
   const profileById = new Map(
@@ -120,6 +133,54 @@ export default async function CustomerDetailPage({ params, searchParams }: Detai
         </Summary>
       </section>
       <div className="grid gap-6 xl:grid-cols-2">
+        <Panel icon={<Package size={18} />} title="Products">
+          <p className="mb-4 text-sm text-muted">
+            Customer-specific access to the shared catalog. Deactivation retains existing workflow
+            history.
+          </p>
+          {result.data.canManageInvitations && (
+            <CustomerProductAssignForm
+              organizationId={organizationId}
+              products={catalog.filter(
+                (product) =>
+                  !customerProducts.some((assignment) => assignment.productId === product.id),
+              )}
+            />
+          )}
+          <div className="mt-5 divide-y divide-border">
+            {customerProducts.length === 0 ? (
+              <p className="py-4 text-sm text-muted">
+                No products have been assigned to this customer.
+              </p>
+            ) : (
+              customerProducts.map((assignment) => (
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  key={assignment.id}
+                >
+                  <div>
+                    <Link
+                      className="text-sm font-semibold text-accent hover:underline"
+                      href={`/beauroi/products/${assignment.productId}`}
+                    >
+                      {assignment.productName}
+                    </Link>
+                    <p className="text-xs text-muted">
+                      {assignment.productCode} · {assignment.status}
+                    </p>
+                  </div>
+                  {result.data.canManageInvitations && (
+                    <CustomerProductToggle
+                      active={assignment.status === 'ACTIVE'}
+                      organizationId={organizationId}
+                      productId={assignment.productId}
+                    />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </Panel>
         <Panel icon={<Building2 size={18} />} title="Company profile">
           <form
             action={updateCustomerProfile.bind(null, organizationId)}

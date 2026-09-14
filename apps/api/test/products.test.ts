@@ -96,4 +96,64 @@ describe('product management API', () => {
       .expect(403)
     expect(rpc).not.toHaveBeenCalled()
   })
+
+  it('updates a catalog record through the admin-only RPC', async () => {
+    await request(app('BEAUROI_ADMIN'))
+      .patch(`/v1/products/${productId}`)
+      .set('authorization', 'Bearer admin')
+      .send({ name: 'Revised product', description: null })
+      .expect(200)
+    expect(rpc).toHaveBeenCalledWith('update_product', {
+      target_product_id: productId,
+      product_name: 'Revised product',
+      product_description: null,
+    })
+  })
+
+  it('rejects employee catalog edits and archival before reaching PostgreSQL', async () => {
+    await request(app('BEAUROI_EMPLOYEE'))
+      .patch(`/v1/products/${productId}`)
+      .set('authorization', 'Bearer employee')
+      .send({ name: 'Revised product', description: null })
+      .expect(403)
+    await request(app('BEAUROI_EMPLOYEE'))
+      .patch(`/v1/products/${productId}/archive`)
+      .set('authorization', 'Bearer employee')
+      .send({ archived: true })
+      .expect(403)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('archives a catalog record through a guarded RPC', async () => {
+    await request(app('BEAUROI_ADMIN'))
+      .patch(`/v1/products/${productId}/archive`)
+      .set('authorization', 'Bearer admin')
+      .send({ archived: true })
+      .expect(200)
+    expect(rpc).toHaveBeenCalledWith('set_product_archived', {
+      target_product_id: productId,
+      archive_product: true,
+    })
+  })
+
+  it('deactivates a customer assignment through a guarded RPC', async () => {
+    await request(app('BEAUROI_ADMIN'))
+      .patch('/v1/products/subscriptions')
+      .set('authorization', 'Bearer admin')
+      .send({ organizationId, productId, active: false })
+      .expect(200)
+    expect(rpc).toHaveBeenCalledWith('set_customer_product_active', {
+      target_organization_id: organizationId,
+      target_product_id: productId,
+      make_active: false,
+    })
+  })
+
+  it('rejects cross-organization customer product reads at the API boundary', async () => {
+    await request(app('CUSTOMER_ADMIN'))
+      .get(`/v1/customers/${productId}/products`)
+      .set('authorization', 'Bearer customer')
+      .expect(403)
+    expect(client.from).not.toHaveBeenCalled()
+  })
 })

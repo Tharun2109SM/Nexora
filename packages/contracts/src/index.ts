@@ -119,6 +119,21 @@ export const createProductSchema = z
   .strict()
 export type CreateProductInput = z.infer<typeof createProductSchema>
 
+export const updateProductSchema = createProductSchema.pick({ name: true, description: true })
+export const productListQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    offset: z.coerce.number().int().min(0).default(0),
+    search: z.string().trim().max(160).optional(),
+    status: z.enum(['ACTIVE', 'ARCHIVED']).optional(),
+  })
+  .strict()
+export const productIdParameterSchema = z.object({ productId: z.uuid() }).strict()
+export const productArchiveSchema = z.object({ archived: z.boolean() }).strict()
+export const customerProductStateSchema = z
+  .object({ organizationId: z.uuid(), productId: z.uuid(), active: z.boolean() })
+  .strict()
+
 export const activateCustomerProductSchema = z
   .object({ organizationId: z.uuid(), productId: z.uuid() })
   .strict()
@@ -135,7 +150,52 @@ export const productRecordSchema = z
   .strict()
 export type ProductRecord = z.infer<typeof productRecordSchema>
 
-export const productListResponseSchema = z.object({ data: z.array(productRecordSchema) }).strict()
+export const productListResponseSchema = z
+  .object({
+    data: z.array(productRecordSchema),
+    meta: z
+      .object({ limit: z.number().int(), offset: z.number().int(), total: z.number().int() })
+      .optional(),
+  })
+  .strict()
+
+export const productAssignmentSchema = z
+  .object({
+    createdAt: z.iso.datetime({ offset: true }),
+    id: z.uuid(),
+    organizationId: z.uuid(),
+    organizationName: z.string(),
+    productId: z.uuid(),
+    productName: z.string(),
+    productCode: z.string(),
+    status: lifecycleStatusSchema,
+  })
+  .strict()
+
+export const productDetailResponseSchema = z
+  .object({
+    data: z
+      .object({
+        assignments: z.array(productAssignmentSchema),
+        createdByName: z.string().nullable(),
+        implementation: z.array(
+          z.object({ id: z.uuid(), name: z.string(), organizationName: z.string() }).strict(),
+        ),
+        onboarding: z.array(
+          z.object({ id: z.uuid(), name: z.string(), organizationName: z.string() }).strict(),
+        ),
+        product: productRecordSchema.extend({
+          updatedAt: z.iso.datetime({ offset: true }),
+          updatedByName: z.string().nullable(),
+        }),
+      })
+      .strict(),
+  })
+  .strict()
+
+export const customerProductsResponseSchema = z
+  .object({ data: z.array(productAssignmentSchema) })
+  .strict()
 
 export const productIdentifierResponseSchema = z
   .object({ data: z.object({ id: z.uuid() }).strict() })
@@ -361,7 +421,7 @@ export const onboardingPlanCreateSchema = z
   })
   .strict()
 export const onboardingPlanUpdateSchema = onboardingPlanCreateSchema
-  .omit({ organizationId: true, productId: true })
+  .omit({ organizationId: true })
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'Provide at least one change')
 
@@ -429,7 +489,7 @@ export const implementationProjectCreateSchema = z
   })
   .strict()
 export const implementationProjectUpdateSchema = implementationProjectCreateSchema
-  .omit({ organizationId: true, productId: true })
+  .omit({ organizationId: true })
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'Provide at least one change')
 

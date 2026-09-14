@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import {
+  ProductDetailControls,
   ProductManagementControls,
   ProductPortfolio,
   ProductSubscriptionForm,
@@ -18,13 +19,14 @@ const product: ProductRecord = {
 }
 
 describe('product management UI', () => {
-  it('renders the real product catalog without exposing internal identifiers', () => {
+  it('renders the real product catalog with a detail link but no protected fields', () => {
     const html = renderToStaticMarkup(<ProductPortfolio products={[product]} />)
     expect(html).toContain('Nexora Ops')
     expect(html).toContain('NEXORA_OPS')
     expect(html).toContain('ACTIVE')
-    expect(html).not.toContain(product.id)
+    expect(html).toContain(`/beauroi/products/${product.id}`)
     expect(html).not.toContain('created_by')
+    expect(html).not.toMatch(/token_hash|logo_object_key|internal_note|requirement_summary/i)
   })
 
   it('renders an honest empty state', () => {
@@ -60,5 +62,19 @@ describe('product management UI', () => {
     expect(html).toContain('Make a product available to a customer')
     expect(html).toContain('Make available')
     expect(html).toContain('Customer A')
+  })
+
+  it('keeps catalog mutation controls out of the employee detail view', () => {
+    const html = renderToStaticMarkup(<ProductDetailControls canManage={false} product={product} />)
+    expect(html).toContain('Only Beau Roi administrators')
+    expect(html).not.toContain('Archive product')
+    expect(html).not.toContain('Save changes')
+  })
+
+  it('shows edit and archive controls to Beau Roi administrators', () => {
+    const html = renderToStaticMarkup(<ProductDetailControls canManage product={product} />)
+    expect(html).toContain('Save changes')
+    expect(html).toContain('Archive product')
+    expect(html).not.toMatch(/token_hash|logo_object_key|internal_note|requirement_summary/i)
   })
 })

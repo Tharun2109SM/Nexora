@@ -1,13 +1,10 @@
 import { AlertTriangle, ArrowRight, BriefcaseBusiness, CalendarClock } from 'lucide-react'
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 
 import type { PortfolioRow, WorkflowOptions } from '@/lib/workflow-data'
 
 import { EmptyState, buttonClassName } from './ui'
-
-const inputClass =
-  'h-10 w-full rounded-md border border-border bg-canvas px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
+import { WorkflowCreateForm } from './workflow-create-form'
 
 function Progress({ value }: { value: number }) {
   return (
@@ -64,47 +61,7 @@ export function WorkflowPortfolio({
         <summary className="cursor-pointer font-display text-lg font-semibold focus-visible:outline-2 focus-visible:outline-accent">
           Create {isOnboarding ? 'onboarding plan' : 'implementation project'}
         </summary>
-        <form action={action} className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <Field label="Workspace name" name="name" required />
-          <Select label="Customer organization" name="organizationId" required>
-            <option value="">Select organization</option>
-            {options.organizations.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Product" name="productId" required>
-            <option value="">Select product</option>
-            {options.products.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label={isOnboarding ? 'Customer Success Manager' : 'Implementation engineer'}
-            name="ownerUserId"
-          >
-            <option value="">Unassigned</option>
-            {options.staff.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.fullName}
-              </option>
-            ))}
-          </Select>
-          <Field label="Start date" name="startsOn" type="date" />
-          <Field
-            label={isOnboarding ? 'Target go-live' : 'Target completion'}
-            name={isOnboarding ? 'targetGoLiveOn' : 'targetCompletionOn'}
-            type="date"
-          />
-          <div className="sm:col-span-2 xl:col-span-3">
-            <button className={buttonClassName()} type="submit">
-              Create draft
-            </button>
-          </div>
-        </form>
+        <WorkflowCreateForm action={action} kind={kind} options={options} />
       </details>
       {rows.length === 0 ? (
         <EmptyState
@@ -237,38 +194,5 @@ function Metric({ label, value }: { label: string; value: number }) {
       <p className="mt-3 font-display text-3xl font-semibold">{value}</p>
       <p className="mt-1 text-xs text-subtle">Current filtered page</p>
     </div>
-  )
-}
-
-function Field({
-  label,
-  ...props
-}: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <label className="grid gap-1.5 text-sm font-medium">
-      {label}
-      <input className={inputClass} {...props} />
-    </label>
-  )
-}
-
-function Select({
-  children,
-  label,
-  name,
-  required,
-}: {
-  children: ReactNode
-  label: string
-  name: string
-  required?: boolean
-}) {
-  return (
-    <label className="grid gap-1.5 text-sm font-medium">
-      {label}
-      <select className={inputClass} name={name} required={required}>
-        {children}
-      </select>
-    </label>
   )
 }

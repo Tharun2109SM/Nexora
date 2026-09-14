@@ -67,6 +67,7 @@ export function OnboardingWorkspace({
           <StatusBadge value={data.status} />
         </Summary>
         <Summary label="Assigned CSM">{data.ownerName ?? 'Not assigned'}</Summary>
+        <Summary label="Product">{data.productName}</Summary>
         <Summary label="Progress">
           <strong className="font-display text-2xl">{data.progressPercent}%</strong>
         </Summary>
@@ -92,6 +93,28 @@ export function OnboardingWorkspace({
             className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
           >
             <Field defaultValue={data.name} label="Plan name" name="name" required />
+            <Select defaultValue={data.productId ?? ''} label="Product" name="productId">
+              <option value="">{data.productId ? 'Select product' : 'No product linked'}</option>
+              {data.productId &&
+                !options.products.some((product) => product.id === data.productId) && (
+                  <option value={data.productId}>{data.productName} · historical</option>
+                )}
+              {options.products
+                .filter(
+                  (product) =>
+                    product.id === data.productId ||
+                    options.subscriptions.some(
+                      (subscription) =>
+                        subscription.organizationId === data.organizationId &&
+                        subscription.productId === product.id,
+                    ),
+                )
+                .map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+            </Select>
             <Select defaultValue={data.status} label="Status" name="status">
               {statuses.map((status) => (
                 <option key={status}>{status}</option>
