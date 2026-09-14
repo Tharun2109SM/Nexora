@@ -19,6 +19,7 @@ import { feedbackRouter } from './routes/feedback.js'
 import { logosRouter } from './routes/logos.js'
 import { meRouter } from './routes/me.js'
 import { organizationsRouter } from './routes/organizations.js'
+import { productsRouter } from './routes/products.js'
 import { releasesRouter } from './routes/releases.js'
 import { supportRouter } from './routes/support.js'
 import { workflowsRouter } from './routes/workflows.js'
@@ -28,6 +29,7 @@ interface CreateAppOptions {
   analyticsRouter?: Router
   feedbackRouter?: Router
   knowledgeRouter?: Router
+  productsRouter?: Router
   releasesRouter?: Router
   supportRouter?: Router
 }
@@ -98,6 +100,7 @@ export function createApp(
     customersRouter,
     organizationsRouter,
     logosRouter,
+    options.productsRouter ?? productsRouter,
     workflowsRouter,
     options.supportRouter ?? supportRouter,
     options.knowledgeRouter ?? knowledgeRouter,

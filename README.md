@@ -207,6 +207,8 @@ Milestone 3 onboarding/implementation workflows, authorization, endpoints, progr
 
 Milestone 7 Knowledge Base is documented in [docs/milestone-7.md](docs/milestone-7.md), and Milestone 8 Analytics & Customer Success is documented in [docs/milestone-8.md](docs/milestone-8.md).
 
+Beau Roi administrators can manage the governed product catalog at `/beauroi/products`. Creating a product makes it active; the administrator must then make it available to a specific active customer organization on the same page before that customer can start onboarding, implementation, or product-scoped support. Both operations use caller-scoped JWTs and narrowly authorized PostgreSQL RPCs. Ordinary Beau Roi employees can read the catalog but cannot create products or provision customer-product relationships. Direct authenticated writes to `products` and `customer_subscriptions` are revoked by `20260914143422_beauroi_admin_product_creation.sql`. Provisioning an existing inactive subscription is intentionally not automated; it requires a reviewed lifecycle decision.
+
 Important policy behavior:
 
 - Customer users see only organizations where they have an active membership.

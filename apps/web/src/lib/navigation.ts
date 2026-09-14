@@ -8,6 +8,7 @@ export const navigationIconIds = [
   'onboarding',
   'organization',
   'overview',
+  'products',
   'releases',
   'settings',
   'support',
@@ -29,6 +30,12 @@ export const beauroiNavigation: readonly NavigationItem[] = [
     href: '/beauroi/customers',
     icon: 'customers',
     label: 'Customers',
+  },
+  {
+    description: 'Products available across customer workflows',
+    href: '/beauroi/products',
+    icon: 'products',
+    label: 'Products',
   },
   {
     description: 'Plans, tasks, training, and documents',

@@ -34,6 +34,18 @@ export function requireBeauRoi(request: Request, _response: Response, next: Next
   next()
 }
 
+export function requireBeauRoiAdmin(request: Request, _response: Response, next: NextFunction) {
+  if (!request.identity) {
+    next(new AppError(401, 'AUTH_REQUIRED', 'Authentication is required.'))
+    return
+  }
+  if (request.identity.role !== 'BEAUROI_ADMIN') {
+    next(new AppError(403, 'BEAUROI_ADMIN_REQUIRED', 'Beau Roi administrator access is required.'))
+    return
+  }
+  next()
+}
+
 export function requireOrganizationAdmin(
   request: Request,
   _response: Response,
