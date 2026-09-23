@@ -24,7 +24,7 @@ export const portfolioRowSchema = z
     ownerUserId: z.uuid().nullable(),
     ownerName: nullableString,
     phase: z.string().optional(),
-    productId: z.uuid(),
+    productId: z.uuid().nullable(),
     productName: z.string(),
     progressPercent: z.coerce.number().int().min(0).max(100),
     status: z.string(),

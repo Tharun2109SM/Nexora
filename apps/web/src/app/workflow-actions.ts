@@ -47,6 +47,7 @@ export async function updateOnboardingPlan(planId: string, formData: FormData) {
       customerUpdate: nullable(formData, 'customerUpdate'),
       name: value(formData, 'name'),
       ownerUserId: nullable(formData, 'ownerUserId'),
+      ...(value(formData, 'productId') && { productId: value(formData, 'productId') }),
       readinessConfirmedAt:
         value(formData, 'status') === 'READY_FOR_GO_LIVE' || value(formData, 'status') === 'LIVE'
           ? new Date().toISOString()
@@ -186,6 +187,7 @@ export async function updateImplementationProject(projectId: string, formData: F
       name: value(formData, 'name'),
       ownerUserId: nullable(formData, 'ownerUserId'),
       phase: value(formData, 'phase'),
+      ...(value(formData, 'productId') && { productId: value(formData, 'productId') }),
       requirementSummary: nullable(formData, 'requirementSummary'),
       startsOn: nullable(formData, 'startsOn'),
       status: value(formData, 'status'),

@@ -2,11 +2,15 @@
 
 import type { ProductRecord } from '@nexora/contracts'
 import { Box, PackagePlus } from 'lucide-react'
+import Link from 'next/link'
 import { useActionState } from 'react'
 
 import {
   activateCustomerProductAction,
+  archiveProductAction,
   createProductAction,
+  setCustomerProductAction,
+  updateProductAction,
   type ProductActionState,
 } from '@/app/product-actions'
 import type { WorkflowOptions } from '@/lib/workflow-data'
@@ -180,6 +184,12 @@ export function ProductPortfolio({ products }: { products: ProductRecord[] }) {
                   {product.code}
                 </p>
                 <h3 className="mt-2 font-display text-xl font-semibold">{product.name}</h3>
+                <Link
+                  className="mt-2 inline-flex text-sm font-semibold text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                  href={`/beauroi/products/${product.id}`}
+                >
+                  View product details
+                </Link>
               </div>
               <span
                 className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${product.status === 'ACTIVE' ? 'border-success/25 bg-success-soft text-success' : 'border-border bg-surface-subtle text-muted'}`}
@@ -194,5 +204,163 @@ export function ProductPortfolio({ products }: { products: ProductRecord[] }) {
         ))}
       </div>
     </section>
+  )
+}
+
+export function ProductDetailControls({
+  canManage,
+  product,
+}: {
+  canManage: boolean
+  product: ProductRecord
+}) {
+  const [editState, editAction, editing] = useActionState(
+    updateProductAction.bind(null, product.id),
+    initialState,
+  )
+  const [archiveState, archiveAction, archiving] = useActionState(
+    archiveProductAction.bind(null, product.id, product.status !== 'ARCHIVED'),
+    initialState,
+  )
+  if (!canManage)
+    return (
+      <p className="text-sm text-muted">
+        Only Beau Roi administrators can edit or archive products.
+      </p>
+    )
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <section className="rounded-lg border border-border bg-surface p-5 shadow-card">
+        <h2 className="font-display text-xl font-semibold">Edit product</h2>
+        <p className="mt-1 text-sm text-muted">The stable code cannot be changed after creation.</p>
+        <form action={editAction} className="mt-4 grid gap-4">
+          <Field label="Product name">
+            <input
+              className={inputClass}
+              defaultValue={product.name}
+              maxLength={160}
+              name="name"
+              required
+            />
+          </Field>
+          <Field label="Description">
+            <textarea
+              className={`${inputClass} min-h-28 py-3`}
+              defaultValue={product.description ?? ''}
+              maxLength={2000}
+              name="description"
+            />
+          </Field>
+          <button className={buttonClassName()} disabled={editing} type="submit">
+            {editing ? 'Saving…' : 'Save changes'}
+          </button>
+          {(editState.error || editState.success) && (
+            <p
+              aria-live="polite"
+              className={`text-sm ${editState.error ? 'text-danger' : 'text-success'}`}
+            >
+              {editState.error ?? editState.success}
+            </p>
+          )}
+        </form>
+      </section>
+      <section className="rounded-lg border border-border bg-surface p-5 shadow-card">
+        <h2 className="font-display text-xl font-semibold">Lifecycle</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Archiving blocks new product selections but preserves customer assignments and existing
+          workflow history.
+        </p>
+        <form action={archiveAction} className="mt-5">
+          <button className={buttonClassName('secondary')} disabled={archiving} type="submit">
+            {archiving
+              ? 'Updating…'
+              : product.status === 'ARCHIVED'
+                ? 'Restore product'
+                : 'Archive product'}
+          </button>
+        </form>
+        {(archiveState.error || archiveState.success) && (
+          <p
+            aria-live="polite"
+            className={`mt-3 text-sm ${archiveState.error ? 'text-danger' : 'text-success'}`}
+          >
+            {archiveState.error ?? archiveState.success}
+          </p>
+        )}
+      </section>
+    </div>
+  )
+}
+
+export function CustomerProductToggle({
+  active,
+  organizationId,
+  productId,
+}: {
+  active: boolean
+  organizationId: string
+  productId: string
+}) {
+  const [state, action, pending] = useActionState(
+    setCustomerProductAction.bind(null, organizationId, productId, !active),
+    initialState,
+  )
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-2">
+      <button className={buttonClassName('quiet')} disabled={pending} type="submit">
+        {pending ? 'Updating…' : active ? 'Deactivate' : 'Reactivate'}
+      </button>
+      {(state.error || state.success) && (
+        <span
+          aria-live="polite"
+          className={`text-xs ${state.error ? 'text-danger' : 'text-success'}`}
+        >
+          {state.error ?? state.success}
+        </span>
+      )}
+    </form>
+  )
+}
+
+export function CustomerProductAssignForm({
+  organizationId,
+  products,
+}: {
+  organizationId: string
+  products: ProductRecord[]
+}) {
+  const [state, action, pending] = useActionState(activateCustomerProductAction, initialState)
+  if (products.length === 0)
+    return (
+      <p className="text-sm text-muted">
+        No unassigned active products are available. Create or restore a product in the catalog
+        first.
+      </p>
+    )
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-3">
+      <input name="organizationId" type="hidden" value={organizationId} />
+      <Field label="Assign product">
+        <select className={inputClass} name="productId" required>
+          <option value="">Select a product</option>
+          {products.map((product) => (
+            <option key={product.id} value={product.id}>
+              {product.name} · {product.code}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <button className={buttonClassName()} disabled={pending} type="submit">
+        {pending ? 'Assigning…' : 'Assign product'}
+      </button>
+      {(state.error || state.success) && (
+        <p
+          aria-live="polite"
+          className={`w-full text-sm ${state.error ? 'text-danger' : 'text-success'}`}
+        >
+          {state.error ?? state.success}
+        </p>
+      )}
+    </form>
   )
 }

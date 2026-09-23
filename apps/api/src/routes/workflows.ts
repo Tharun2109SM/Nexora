@@ -166,6 +166,7 @@ function onboardingPlanUpdatePayload(input: z.infer<typeof onboardingPlanUpdateS
     ...(input.customerUpdate !== undefined && { customer_update: input.customerUpdate }),
     ...(input.name !== undefined && { name: input.name }),
     ...(input.ownerUserId !== undefined && { owner_user_id: input.ownerUserId }),
+    ...(input.productId !== undefined && { product_id: input.productId }),
     ...(input.readinessConfirmedAt !== undefined && {
       readiness_confirmed_at: input.readinessConfirmedAt,
     }),
@@ -230,6 +231,7 @@ function implementationProjectUpdatePayload(
     ...(input.customerUpdate !== undefined && { customer_update: input.customerUpdate }),
     ...(input.name !== undefined && { name: input.name }),
     ...(input.ownerUserId !== undefined && { owner_user_id: input.ownerUserId }),
+    ...(input.productId !== undefined && { product_id: input.productId }),
     ...(input.phase !== undefined && { phase: input.phase }),
     ...(input.startsOn !== undefined && { starts_on: input.startsOn }),
     ...(input.status !== undefined && { workflow_status: input.status }),
