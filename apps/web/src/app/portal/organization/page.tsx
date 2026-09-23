@@ -14,6 +14,7 @@ import { CopyField } from '@/components/copy-field'
 import { PageHeader } from '@/components/ui'
 import { apiRequest } from '@/lib/api'
 import { organizationResponseSchema } from '@/lib/organization-data'
+import { customerProductAvailabilityLabel } from '@/lib/product-presentation'
 import { requireViewer } from '@/lib/viewer'
 
 export const metadata: Metadata = { title: 'Organization administration' }
@@ -66,10 +67,7 @@ export default async function OrganizationPage({ searchParams }: OrganizationPag
                 <div className="py-3" key={product.id}>
                   <p className="text-sm font-semibold">{product.productName}</p>
                   <p className="text-xs text-muted">
-                    {product.productCode} ·{' '}
-                    {product.status === 'ACTIVE'
-                      ? 'Available for new workflows'
-                      : 'Historical access'}
+                    {product.productCode} · {customerProductAvailabilityLabel(product)}
                   </p>
                 </div>
               ))}

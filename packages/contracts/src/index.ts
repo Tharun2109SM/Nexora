@@ -168,9 +168,12 @@ export const productAssignmentSchema = z
     productId: z.uuid(),
     productName: z.string(),
     productCode: z.string(),
+    productStatus: lifecycleStatusSchema,
     status: lifecycleStatusSchema,
   })
   .strict()
+
+export type ProductAssignment = z.infer<typeof productAssignmentSchema>
 
 export const productDetailResponseSchema = z
   .object({

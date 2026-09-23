@@ -103,7 +103,7 @@ export function createProductsRouter(dependencies: ProductRouterDependencies = {
         supabase
           .from('customer_subscriptions')
           .select(
-            'id,organization_id,product_id,status,created_at,organizations(name),products(name,code)',
+            'id,organization_id,product_id,status,created_at,organizations(name),products(name,code,status)',
           )
           .eq('product_id', productId)
           .order('created_at', { ascending: false }),
@@ -157,7 +157,7 @@ export function createProductsRouter(dependencies: ProductRouterDependencies = {
           product_id: z.uuid(),
           status: z.string(),
           organizations: z.object({ name: z.string() }),
-          products: z.object({ name: z.string(), code: z.string() }),
+          products: z.object({ name: z.string(), code: z.string(), status: z.string() }),
         }),
       )
       .parse(assignmentsResult.data ?? [])
@@ -186,6 +186,7 @@ export function createProductsRouter(dependencies: ProductRouterDependencies = {
             productId: item.product_id,
             productName: item.products.name,
             productCode: item.products.code,
+            productStatus: item.products.status,
             status: item.status,
           })),
           onboarding: workflowRows.parse(onboardingResult.data ?? []).map((item) => ({
@@ -264,7 +265,7 @@ export function createProductsRouter(dependencies: ProductRouterDependencies = {
       const result = await createClient(request.accessToken)
         .from('customer_subscriptions')
         .select(
-          'id,organization_id,product_id,status,created_at,organizations(name),products(name,code)',
+          'id,organization_id,product_id,status,created_at,organizations(name),products(name,code,status)',
         )
         .eq('organization_id', organizationId)
         .order('created_at', { ascending: false })
@@ -278,7 +279,7 @@ export function createProductsRouter(dependencies: ProductRouterDependencies = {
             product_id: z.uuid(),
             status: z.string(),
             organizations: z.object({ name: z.string() }),
-            products: z.object({ name: z.string(), code: z.string() }),
+            products: z.object({ name: z.string(), code: z.string(), status: z.string() }),
           }),
         )
         .parse(result.data)
@@ -292,6 +293,7 @@ export function createProductsRouter(dependencies: ProductRouterDependencies = {
             productId: item.product_id,
             productName: item.products.name,
             productCode: item.products.code,
+            productStatus: item.products.status,
             status: item.status,
           })),
         }),
